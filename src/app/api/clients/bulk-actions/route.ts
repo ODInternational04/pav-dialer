@@ -53,32 +53,60 @@ export async function POST(request: NextRequest) {
         if (data?.priority) {
           const priorityNote = `Priority: ${data.priority.toUpperCase()}`
           
-          const { error } = await supabase
+          // Fetch existing clients
+          const { data: existingClients, error: fetchError } = await supabase
             .from('clients')
-            .update({
-              notes: supabase.raw(`COALESCE(notes, '') || '\n' || '${priorityNote}'`),
-              updated_at: new Date().toISOString(),
-              last_updated_by: payload.userId
-            })
+            .select('id, notes')
             .in('id', clientIds)
-
-          if (error) throw error
+          
+          if (fetchError) throw fetchError
+          
+          // Update each client with appended note
+          const updates = existingClients?.map(client => ({
+            id: client.id,
+            notes: (client.notes || '') + '\n' + priorityNote,
+            updated_at: new Date().toISOString(),
+            last_updated_by: payload.userId
+          }))
+          
+          if (updates && updates.length > 0) {
+            const { error } = await supabase
+              .from('clients')
+              .upsert(updates)
+            
+            if (error) throw error
+          }
+          
           message = `${clientIds.length} clients marked as ${data.priority} priority`
         }
         break
 
       case 'add_note':
         if (data?.note) {
-          const { error } = await supabase
+          // Fetch existing clients
+          const { data: existingClients, error: fetchError } = await supabase
             .from('clients')
-            .update({
-              notes: supabase.raw(`COALESCE(notes, '') || '\n' || '${data.note}'`),
-              updated_at: new Date().toISOString(),
-              last_updated_by: payload.userId
-            })
+            .select('id, notes')
             .in('id', clientIds)
-
-          if (error) throw error
+          
+          if (fetchError) throw fetchError
+          
+          // Update each client with appended note
+          const updates = existingClients?.map(client => ({
+            id: client.id,
+            notes: (client.notes || '') + '\n' + data.note,
+            updated_at: new Date().toISOString(),
+            last_updated_by: payload.userId
+          }))
+          
+          if (updates && updates.length > 0) {
+            const { error } = await supabase
+              .from('clients')
+              .upsert(updates)
+            
+            if (error) throw error
+          }
+          
           message = `Note added to ${clientIds.length} clients`
         }
         break
