@@ -19,8 +19,10 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '10')
     const isRead = searchParams.get('isRead')
     const type = searchParams.get('type')
+    const clientId = searchParams.get('client_id')
     const showPending = searchParams.get('showPending') === 'true'
     const includeClient = searchParams.get('include_client') === 'true'
+    const adminView = searchParams.get('admin_view') === 'true' && decoded.role === 'admin'
 
     const offset = (page - 1) * limit
 
@@ -42,8 +44,13 @@ export async function GET(request: NextRequest) {
           notes
         )
       ` : '*')
-      .eq('user_id', decoded.userId)
-      .order('scheduled_for', { ascending: true })
+
+    // Apply user filter unless admin view is requested
+    if (!adminView) {
+      query = query.eq('user_id', decoded.userId)
+    }
+
+    query = query.order('scheduled_for', { ascending: true })
 
     // Apply filters
     if (isRead !== null) {
@@ -54,6 +61,10 @@ export async function GET(request: NextRequest) {
       query = query.eq('type', type)
     }
 
+    if (clientId) {
+      query = query.eq('client_id', clientId)
+    }
+
     if (showPending) {
       // Show only pending notifications (scheduled for now or past and not sent)
       const now = new Date().toISOString()
@@ -62,11 +73,35 @@ export async function GET(request: NextRequest) {
         .eq('is_sent', false)
     }
 
-    // Get total count
-    const { count } = await supabase
+    // Get total count with same filters
+    let countQuery = supabase
       .from('notifications')
       .select('*', { count: 'exact', head: true })
-      .eq('user_id', decoded.userId)
+
+    if (!adminView) {
+      countQuery = countQuery.eq('user_id', decoded.userId)
+    }
+
+    if (isRead !== null) {
+      countQuery = countQuery.eq('is_read', isRead === 'true')
+    }
+
+    if (type) {
+      countQuery = countQuery.eq('type', type)
+    }
+
+    if (clientId) {
+      countQuery = countQuery.eq('client_id', clientId)
+    }
+
+    if (showPending) {
+      const now = new Date().toISOString()
+      countQuery = countQuery
+        .lte('scheduled_for', now)
+        .eq('is_sent', false)
+    }
+
+    const { count } = await countQuery
 
     // Get paginated data
     const { data: notifications, error } = await query

@@ -91,14 +91,6 @@ export async function PUT(
       call_ended_at
     } = body
 
-    // Enforce mandatory notes
-    if (notes !== undefined && (!notes || notes.trim().length === 0)) {
-      return NextResponse.json(
-        { error: 'Notes are mandatory for all calls' },
-        { status: 400 }
-      )
-    }
-
     // Validate callback requirements
     if (callback_requested && !callback_time) {
       return NextResponse.json(
@@ -129,7 +121,7 @@ export async function PUT(
     const updateData: any = {}
     if (call_status !== undefined) updateData.call_status = call_status
     if (call_duration !== undefined) updateData.call_duration = call_duration
-    if (notes !== undefined) updateData.notes = notes.trim()
+    if (notes !== undefined) updateData.notes = notes?.trim() || ''
     if (callback_requested !== undefined) updateData.callback_requested = callback_requested
     if (callback_time !== undefined) updateData.callback_time = callback_time
     if (call_ended_at !== undefined) updateData.call_ended_at = call_ended_at

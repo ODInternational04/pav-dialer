@@ -169,14 +169,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Enforce mandatory notes
-    if (!notes || notes.trim().length === 0) {
-      return NextResponse.json(
-        { error: 'Notes are mandatory for all calls' },
-        { status: 400 }
-      )
-    }
-
     // Validate callback requirements
     if (callback_requested && !callback_time) {
       return NextResponse.json(
@@ -191,7 +183,7 @@ export async function POST(request: NextRequest) {
       call_type,
       call_status,
       call_duration: call_duration || null,
-      notes: notes.trim(),
+      notes: notes?.trim() || '',
       callback_requested: callback_requested || false,
       callback_time: callback_time || null,
       call_started_at: call_started_at || new Date().toISOString(),

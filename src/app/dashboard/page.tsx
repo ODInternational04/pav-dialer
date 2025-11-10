@@ -11,6 +11,7 @@ import {
   CheckCircleIcon, 
   ClockIcon,
   ChartBarIcon,
+  CogIcon,
   ArrowTrendingUpIcon,
   CalendarDaysIcon
 } from '@heroicons/react/24/outline'
@@ -316,13 +317,23 @@ export default function Dashboard() {
             </Link>
             
             {isAdmin && (
-              <Link 
-                href="/dashboard/reports"
-                className="flex items-center space-x-3 p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors text-left"
-              >
-                <ChartBarIcon className="w-5 h-5 text-purple-600 flex-shrink-0" />
-                <span className="text-sm font-medium text-purple-900">View Reports</span>
-              </Link>
+              <>
+                <Link 
+                  href="/dashboard/threecx-settings"
+                  className="flex items-center space-x-3 p-4 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors text-left"
+                >
+                  <CogIcon className="w-5 h-5 text-indigo-600 flex-shrink-0" />
+                  <span className="text-sm font-medium text-indigo-900">3CX Settings</span>
+                </Link>
+                
+                <Link 
+                  href="/dashboard/reports"
+                  className="flex items-center space-x-3 p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors text-left"
+                >
+                  <ChartBarIcon className="w-5 h-5 text-purple-600 flex-shrink-0" />
+                  <span className="text-sm font-medium text-purple-900">View Reports</span>
+                </Link>
+              </>
             )}
           </div>
         </div>

@@ -112,6 +112,18 @@ export default function CallbacksPage() {
 
   useEffect(() => {
     fetchCallbacks()
+    
+    // Listen for callback deletion events
+    const handleCallbackDeletion = (event: CustomEvent) => {
+      console.log('🔄 Callback notifications deleted, refreshing callbacks page:', event.detail)
+      fetchCallbacks() // Refresh callbacks immediately
+    }
+    
+    window.addEventListener('callbackNotificationsDeleted', handleCallbackDeletion as EventListener)
+    
+    return () => {
+      window.removeEventListener('callbackNotificationsDeleted', handleCallbackDeletion as EventListener)
+    }
   }, [fetchCallbacks])
 
   const markAsRead = async (notificationId: string) => {

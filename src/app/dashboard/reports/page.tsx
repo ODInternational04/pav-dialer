@@ -1044,27 +1044,6 @@ export default function AdminReportsPage() {
               Comprehensive analytics and performance insights
             </p>
           </div>
-          <div className="flex space-x-3">
-            <button
-              onClick={testPDFGeneration}
-              className="bg-white/20 hover:bg-white/30 backdrop-blur-sm border border-white/30 text-white px-6 py-3 rounded-lg font-medium transition-all duration-200 flex items-center shadow-lg hover:shadow-xl"
-            >
-              <DocumentIcon className="w-5 h-5 mr-2" />
-              Test PDF
-            </button>
-            <button
-              onClick={exportReports}
-              disabled={isGeneratingPDF}
-              className={`${
-                isGeneratingPDF 
-                  ? 'bg-gray-400 cursor-not-allowed' 
-                  : 'bg-emerald-500 hover:bg-emerald-600 shadow-lg hover:shadow-xl'
-              } text-white px-6 py-3 rounded-lg font-medium transition-all duration-200 flex items-center`}
-            >
-              <DocumentArrowDownIcon className="w-5 h-5 mr-2" />
-              {isGeneratingPDF ? 'Generating PDF...' : 'Export PDF Report'}
-            </button>
-          </div>
         </div>
 
         {/* Enhanced Filters Section */}

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { Client, CallLog, CreateCallLogRequest } from '@/types'
+import { threeCXService } from '@/lib/3cx'
 import { 
   XMarkIcon,
   PhoneIcon,
@@ -10,7 +11,10 @@ import {
   XCircleIcon,
   ExclamationTriangleIcon,
   PlayIcon,
-  StopIcon
+  StopIcon,
+  FaceSmileIcon,
+  LightBulbIcon,
+  ChatBubbleLeftIcon
 } from '@heroicons/react/24/outline'
 
 interface CallLogModalProps {
@@ -19,6 +23,9 @@ interface CallLogModalProps {
   client: Client
   existingCallLog?: CallLog
   onSave: (callLog: CreateCallLogRequest) => Promise<void>
+  threeCXCallDuration?: number // Duration from 3CX session if available
+  autoStartTimer?: boolean // Whether to automatically start the timer when modal opens
+  onCallEndedManually?: () => void // Callback when user manually ends a call
 }
 
 export default function CallLogModal({ 
@@ -26,7 +33,10 @@ export default function CallLogModal({
   onClose, 
   client, 
   existingCallLog, 
-  onSave 
+  onSave,
+  threeCXCallDuration,
+  autoStartTimer = false,
+  onCallEndedManually
 }: CallLogModalProps) {
   const [formData, setFormData] = useState<CreateCallLogRequest>({
     client_id: client.id,
@@ -38,11 +48,21 @@ export default function CallLogModal({
     callback_time: '',
   })
 
+  const [feedbackData, setFeedbackData] = useState({
+    has_feedback: false,
+    feedback_type: 'general' as 'complaint' | 'happy' | 'suggestion' | 'general',
+    feedback_subject: '',
+    feedback_notes: '',
+    feedback_priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent'
+  })
+
   const [isCallActive, setIsCallActive] = useState(false)
   const [callStartTime, setCallStartTime] = useState<Date | null>(null)
   const [callDuration, setCallDuration] = useState(0)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isLoading, setIsLoading] = useState(false)
+  const [isCallbackCall, setIsCallbackCall] = useState(false)
+  const [callbackPriority, setCallbackPriority] = useState<string | null>(null)
 
   // Timer for active call
   useEffect(() => {
@@ -76,22 +96,103 @@ export default function CallLogModal({
       })
       setCallDuration(existingCallLog.call_duration || 0)
     } else {
-      // Reset form for new call log
+      // Check for active 3CX call session
+      const activeCall = threeCXService.getActiveCallByClient(client.id)
+      const duration = threeCXCallDuration || activeCall?.duration || 0
+      
+      // Reset form for new call log, with potential 3CX data
       setFormData({
         client_id: client.id,
         call_type: 'outbound',
-        call_status: 'completed',
-        call_duration: 0,
-        notes: '',
+        call_status: duration > 0 ? 'completed' : 'completed', // Default to completed
+        call_duration: duration,
+        notes: activeCall ? '3CX call completed' : '',
         callback_requested: false,
         callback_time: '',
       })
-      setCallDuration(0)
+      setCallDuration(duration)
     }
     setIsCallActive(false)
     setCallStartTime(null)
     setErrors({})
-  }, [existingCallLog, client.id, isOpen])
+    // Reset feedback data
+    setFeedbackData({
+      has_feedback: false,
+      feedback_type: 'general',
+      feedback_subject: '',
+      feedback_notes: '',
+      feedback_priority: 'medium'
+    })
+  }, [existingCallLog, client.id, isOpen, threeCXCallDuration])
+
+  // Auto-start timer for 3CX calls - only trigger on modal open, not on timer state changes
+  useEffect(() => {
+    if (isOpen && !existingCallLog) {
+      // Check for callback context when modal opens
+      const checkCallbackContext = async () => {
+        try {
+          const callbackContext = localStorage.getItem('current_callback_context')
+          
+          if (callbackContext) {
+            const context = JSON.parse(callbackContext)
+            console.log('📞 Callback context detected:', context)
+            
+            // Set callback state
+            setIsCallbackCall(true)
+            setCallbackPriority(context.priority || null)
+            
+            // Pre-fill form with callback context
+            setFormData(prev => ({
+              ...prev,
+              notes: `🚨 CALLBACK CALL - ${prev.notes || ''}`,
+              call_status: 'completed' // Assume it will be completed
+            }))
+            
+            // Automatically start the call for callback
+            if (context.priority === 'overdue' || context.priority === 'urgent') {
+              console.log('🚨 Starting automatic callback call for:', context.clientName)
+              
+              // Start the call timer
+              setIsCallActive(true)
+              setCallStartTime(new Date())
+              
+              // Import and trigger 3CX call
+              const { threeCXService } = await import('@/lib/3cx')
+              
+              const callSession = threeCXService.initiateCall(
+                context.clientId, 
+                context.phoneNumber, 
+                {
+                  isCallback: true,
+                  notificationId: context.notificationId,
+                  priority: context.priority
+                }
+              )
+              
+              console.log('✅ 3CX call initiated for callback:', context.clientName)
+              
+              // Show success message
+              setTimeout(() => {
+                alert(`� 3CX call started for callback:\n${context.clientName}\n${context.phoneNumber}\n\nTimer started. End call when finished.`)
+              }, 1000)
+            }
+            
+            // Clear the context after processing
+            localStorage.removeItem('current_callback_context')
+          } else if (autoStartTimer) {
+            // Automatically start the call timer for active 3CX calls (non-callback)
+            setIsCallActive(true)
+            setCallStartTime(new Date())
+            console.log('Auto-started call timer for 3CX call')
+          }
+        } catch (error) {
+          console.error('Error checking callback context:', error)
+        }
+      }
+      
+      checkCallbackContext()
+    }
+  }, [isOpen, autoStartTimer, existingCallLog, client.id])
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
@@ -166,8 +267,19 @@ export default function CallLogModal({
       console.error('Error ending call status:', error)
     }
 
+    // Update form data with final call duration before stopping timer
+    setFormData(prev => ({
+      ...prev,
+      call_duration: callDuration
+    }))
+    
     setIsCallActive(false)
     setCallStartTime(null)
+    
+    // Notify parent that call was ended manually to prevent auto-reopening
+    if (onCallEndedManually) {
+      onCallEndedManually()
+    }
   }
 
   const handleQuickCallback = (hours: number) => {
@@ -207,12 +319,18 @@ export default function CallLogModal({
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
 
-    if (!formData.notes.trim()) {
-      newErrors.notes = 'Call notes are mandatory for all calls'
-    }
-
     if (formData.callback_requested && !formData.callback_time) {
       newErrors.callback_time = 'Callback time must be specified when callback is requested'
+    }
+
+    // Validate feedback if enabled
+    if (feedbackData.has_feedback) {
+      if (!feedbackData.feedback_subject.trim()) {
+        newErrors.feedback_subject = 'Feedback subject is required'
+      }
+      if (!feedbackData.feedback_notes.trim()) {
+        newErrors.feedback_notes = 'Feedback notes are required'
+      }
     }
 
     setErrors(newErrors)
@@ -226,9 +344,66 @@ export default function CallLogModal({
 
     setIsLoading(true)
     try {
+      // Save call log first
       await onSave(formData)
       
-      // End call status when call is saved
+      // Clear callback context if this was a callback call
+      if (isCallbackCall) {
+        const { threeCXService } = await import('@/lib/3cx')
+        threeCXService.clearCallbackContext()
+        console.log('✅ Callback context cleared after successful call log save')
+        
+        // Delete related callback notifications
+        await deleteCallbackNotifications()
+      }
+      
+      // Create customer feedback if enabled
+      if (feedbackData.has_feedback) {
+        console.log('🎯 Saving customer feedback...', feedbackData)
+        const token = localStorage.getItem('token')
+        const feedbackResponse = await fetch('/api/debug/customer-feedback', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            client_id: client.id,
+            feedback_type: feedbackData.feedback_type,
+            subject: feedbackData.feedback_subject,
+            notes: feedbackData.feedback_notes,
+            priority: feedbackData.feedback_priority
+          })
+        })
+
+        if (!feedbackResponse.ok) {
+          const errorData = await feedbackResponse.json()
+          console.error('❌ Feedback save failed:', errorData)
+          alert(`Failed to save feedback: ${errorData.error || 'Unknown error'}\n\nCheck console for details.`)
+        } else {
+          const feedbackResult = await feedbackResponse.json()
+          console.log('✅ Feedback saved successfully:', feedbackResult)
+          alert('✅ Feedback saved successfully!')
+        }
+      }
+      
+      // End call status when call is saved and stop any active timer
+      if (isCallActive) {
+        // Update form data with final call duration before ending
+        setFormData(prev => ({
+          ...prev,
+          call_duration: callDuration
+        }))
+        
+        setIsCallActive(false)
+        setCallStartTime(null)
+        
+        // Notify parent that call was ended manually to prevent auto-reopening
+        if (onCallEndedManually) {
+          onCallEndedManually()
+        }
+      }
+      
       const token = localStorage.getItem('token')
       await fetch('/api/user-status', {
         method: 'PUT',
@@ -244,8 +419,75 @@ export default function CallLogModal({
       handleClose()
     } catch (error) {
       console.error('Error saving call log:', error)
+      alert('Failed to save call log. Please try again.')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const deleteCallbackNotifications = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) return
+
+      console.log('🗑️ Deleting callback notifications for client:', client.id)
+
+      // Get all callback notifications for this client
+      const response = await fetch(`/api/notifications?type=callback&client_id=${client.id}&include_client=true`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        const callbackNotifications = data.notifications || []
+        
+        // Filter for unread/active notifications for this client
+        const notificationsToDelete = callbackNotifications
+          .filter((notif: any) => 
+            notif.client_id === client.id && 
+            notif.type === 'callback' && 
+            !notif.is_read
+          )
+          .map((notif: any) => notif.id)
+
+        if (notificationsToDelete.length > 0) {
+          console.log(`🗑️ Deleting ${notificationsToDelete.length} callback notifications:`, notificationsToDelete)
+          
+          // Delete the notifications
+          const deleteResponse = await fetch('/api/notifications', {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ 
+              notificationIds: notificationsToDelete 
+            })
+          })
+
+          if (deleteResponse.ok) {
+            const deleteResult = await deleteResponse.json()
+            console.log('✅ Callback notifications deleted successfully:', deleteResult)
+            
+            // Trigger a custom event to notify other components
+            window.dispatchEvent(new CustomEvent('callbackNotificationsDeleted', {
+              detail: { 
+                clientId: client.id,
+                deletedCount: notificationsToDelete.length,
+                deletedIds: notificationsToDelete
+              }
+            }))
+          } else {
+            console.error('❌ Failed to delete callback notifications:', await deleteResponse.json())
+          }
+        } else {
+          console.log('ℹ️ No callback notifications found to delete for this client')
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting callback notifications:', error)
     }
   }
 
@@ -263,16 +505,38 @@ export default function CallLogModal({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="p-6 border-b border-gray-200">
+        <div className={`p-6 border-b border-gray-200 ${
+          isCallbackCall ? (
+            callbackPriority === 'overdue' ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-200'
+          ) : 'bg-white'
+        }`}>
           <div className="flex justify-between items-start">
             <div>
-              <h2 className="text-xl font-bold text-gray-900">
-                {existingCallLog ? 'Edit Call Log' : 'Log Call'}
-              </h2>
+              <div className="flex items-center space-x-2">
+                <h2 className="text-xl font-bold text-gray-900">
+                  {existingCallLog ? 'Edit Call Log' : 'Log Call'}
+                </h2>
+                {isCallbackCall && (
+                  <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                    callbackPriority === 'overdue' 
+                      ? 'bg-red-100 text-red-800 animate-pulse' 
+                      : 'bg-orange-100 text-orange-800'
+                  }`}>
+                    {callbackPriority === 'overdue' ? '🚨 OVERDUE CALLBACK' : '⚠️ CALLBACK DUE'}
+                  </div>
+                )}
+              </div>
               <div className="mt-2 text-sm text-gray-600">
                 <p className="font-medium">{client.principal_key_holder}</p>
                 <p>{client.telephone_cell}</p>
                 <p>Box: {client.box_number} | Contract: {client.contract_no}</p>
+                {isCallbackCall && (
+                  <p className={`mt-1 font-medium ${
+                    callbackPriority === 'overdue' ? 'text-red-600' : 'text-orange-600'
+                  }`}>
+                    📞 This call was initiated from a scheduled callback notification
+                  </p>
+                )}
               </div>
             </div>
             <button
@@ -400,17 +664,16 @@ export default function CallLogModal({
             </div>
           )}
 
-          {/* Notes (Mandatory) */}
+          {/* Notes (Optional) */}
           <div>
             <label className="label">
-              Call Notes <span className="text-danger-500">*</span>
+              Call Notes
             </label>
             <textarea
-              value={formData.notes}
+              value={formData.notes || ''}
               onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
               className={`input h-24 resize-none ${errors.notes ? 'border-danger-500' : ''}`}
-              placeholder="Enter detailed notes about this call (mandatory)..."
-              required
+              placeholder="Enter notes about this call (optional)..."
             />
             {errors.notes && (
               <p className="text-sm text-danger-600 mt-1">{errors.notes}</p>
@@ -484,6 +747,122 @@ export default function CallLogModal({
             )}
           </div>
 
+          {/* Customer Feedback Section */}
+          <div className="bg-purple-50 rounded-lg p-4">
+            <div className="flex items-center mb-3">
+              <input
+                type="checkbox"
+                id="has_feedback"
+                checked={feedbackData.has_feedback}
+                onChange={(e) => setFeedbackData(prev => ({ 
+                  ...prev, 
+                  has_feedback: e.target.checked
+                }))}
+                className="mr-3"
+              />
+              <label htmlFor="has_feedback" className="font-medium text-gray-900">
+                Add Customer Feedback
+              </label>
+            </div>
+
+            {feedbackData.has_feedback && (
+              <div className="space-y-4">
+                {/* Feedback Type */}
+                <div>
+                  <label className="label">Feedback Type</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { value: 'complaint', label: 'Complaint', icon: ExclamationTriangleIcon, color: 'red' },
+                      { value: 'happy', label: 'Happy', icon: FaceSmileIcon, color: 'green' },
+                      { value: 'suggestion', label: 'Suggestion', icon: LightBulbIcon, color: 'blue' },
+                      { value: 'general', label: 'General', icon: ChatBubbleLeftIcon, color: 'gray' }
+                    ].map((option) => (
+                      <label
+                        key={option.value}
+                        className={`flex items-center p-3 border rounded-lg cursor-pointer transition-colors ${
+                          feedbackData.feedback_type === option.value
+                            ? 'border-purple-500 bg-purple-100'
+                            : 'border-gray-300 hover:border-gray-400'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="feedback_type"
+                          value={option.value}
+                          checked={feedbackData.feedback_type === option.value}
+                          onChange={(e) => setFeedbackData(prev => ({ 
+                            ...prev, 
+                            feedback_type: e.target.value as any 
+                          }))}
+                          className="sr-only"
+                        />
+                        <option.icon className={`w-5 h-5 mr-3 text-${option.color}-600`} />
+                        <span className="font-medium">{option.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Feedback Priority */}
+                <div>
+                  <label className="label">Priority</label>
+                  <select
+                    value={feedbackData.feedback_priority}
+                    onChange={(e) => setFeedbackData(prev => ({ 
+                      ...prev, 
+                      feedback_priority: e.target.value as any 
+                    }))}
+                    className="input"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+                </div>
+
+                {/* Feedback Subject */}
+                <div>
+                  <label className="label">
+                    Subject <span className="text-danger-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={feedbackData.feedback_subject}
+                    onChange={(e) => setFeedbackData(prev => ({ 
+                      ...prev, 
+                      feedback_subject: e.target.value 
+                    }))}
+                    className={`input ${errors.feedback_subject ? 'border-danger-500' : ''}`}
+                    placeholder="Brief description of the feedback..."
+                  />
+                  {errors.feedback_subject && (
+                    <p className="text-sm text-danger-600 mt-1">{errors.feedback_subject}</p>
+                  )}
+                </div>
+
+                {/* Feedback Notes */}
+                <div>
+                  <label className="label">
+                    Feedback Notes <span className="text-danger-500">*</span>
+                  </label>
+                  <textarea
+                    value={feedbackData.feedback_notes}
+                    onChange={(e) => setFeedbackData(prev => ({ 
+                      ...prev, 
+                      feedback_notes: e.target.value 
+                    }))}
+                    className={`input h-20 resize-none ${errors.feedback_notes ? 'border-danger-500' : ''}`}
+                    placeholder="Detailed feedback information..."
+                  />
+                  {errors.feedback_notes && (
+                    <p className="text-sm text-danger-600 mt-1">{errors.feedback_notes}</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Form Actions */}
           <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
             <button
@@ -497,7 +876,7 @@ export default function CallLogModal({
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={isLoading || !formData.notes.trim()}
+              disabled={isLoading}
             >
               {isLoading ? 'Saving...' : existingCallLog ? 'Update Call Log' : 'Save Call Log'}
             </button>
