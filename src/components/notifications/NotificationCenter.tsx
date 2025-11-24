@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { Notification } from '@/types'
 import { useAuth } from '@/contexts/AuthContext'
+import { throttledApiCall } from '@/lib/requestThrottle'
 import { 
   BellIcon,
   CheckIcon,
@@ -35,16 +36,18 @@ export default function NotificationCenter({ isOpen, onClose }: NotificationCent
         ...(filter === 'callback' && { type: 'callback' }),
       })
 
-      const response = await fetch(`/api/notifications?${params}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
+      const data = await throttledApiCall(
+        `/api/notifications?${params}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         },
-      })
+        `notification-center-${filter}`,
+        30000 // Cache for 30 seconds
+      )
 
-      if (response.ok) {
-        const data = await response.json()
-        setNotifications(data.notifications || [])
-      }
+      setNotifications(data.notifications || [])
     } catch (error) {
       console.error('Error fetching notifications:', error)
     } finally {
@@ -61,7 +64,7 @@ export default function NotificationCenter({ isOpen, onClose }: NotificationCent
   const markAsRead = async (notificationIds: string[]) => {
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch('/api/notifications', {
+      await throttledApiCall('/api/notifications', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -71,18 +74,16 @@ export default function NotificationCenter({ isOpen, onClose }: NotificationCent
           action: 'markAsRead',
           notificationIds,
         }),
-      })
+      }, `mark-read-${notificationIds.join(',')}`);
 
-      if (response.ok) {
-        // Update local state
-        setNotifications(prev =>
-          prev.map(notification =>
-            notificationIds.includes(notification.id)
-              ? { ...notification, is_read: true }
-              : notification
-          )
+      // Update local state
+      setNotifications(prev =>
+        prev.map(notification =>
+          notificationIds.includes(notification.id)
+            ? { ...notification, is_read: true }
+            : notification
         )
-      }
+      )
     } catch (error) {
       console.error('Error marking notifications as read:', error)
     }
@@ -91,7 +92,7 @@ export default function NotificationCenter({ isOpen, onClose }: NotificationCent
   const markAllAsRead = async () => {
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch('/api/notifications', {
+      await throttledApiCall('/api/notifications', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -100,13 +101,11 @@ export default function NotificationCenter({ isOpen, onClose }: NotificationCent
         body: JSON.stringify({
           action: 'markAllAsRead',
         }),
-      })
+      }, 'mark-all-read');
 
-      if (response.ok) {
-        setNotifications(prev =>
-          prev.map(notification => ({ ...notification, is_read: true }))
-        )
-      }
+      setNotifications(prev =>
+        prev.map(notification => ({ ...notification, is_read: true }))
+      )
     } catch (error) {
       console.error('Error marking all notifications as read:', error)
     }

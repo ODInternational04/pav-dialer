@@ -5,6 +5,7 @@ import { verifyToken } from '@/lib/auth'
 // Get all users with their call status
 export async function GET(request: NextRequest) {
   try {
+    console.log('🔍 GET /api/user-status called - using telephone_cell column')
     const token = request.headers.get('Authorization')?.replace('Bearer ', '')
     if (!token) {
       return NextResponse.json({ error: 'No token provided' }, { status: 401 })
@@ -30,17 +31,18 @@ export async function GET(request: NextRequest) {
           id,
           principal_key_holder,
           box_number,
-          phone_number
+          telephone_cell
         )
       `)
       .eq('is_active', true)
       .order('first_name')
 
     if (error) {
-      console.error('Error fetching users call status:', error)
+      console.error('❌ Error fetching users call status:', error)
       return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 })
     }
 
+    console.log('✅ Successfully fetched user call status, users count:', users?.length || 0)
     return NextResponse.json({ users })
   } catch (error) {
     console.error('Error in user status GET:', error)

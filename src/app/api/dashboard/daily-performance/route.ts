@@ -36,23 +36,30 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch daily performance' }, { status: 500 })
     }
 
-    // Group calls by date
+    // Group calls by date using South African Standard Time (SAST = UTC+2)
+    const sastOffset = 2 * 60 * 60 * 1000 // 2 hours in milliseconds
     const dailyData = []
+    
     for (let i = 6; i >= 0; i--) {
-      const date = new Date()
-      date.setDate(date.getDate() - i)
-      const dateStr = date.toISOString().split('T')[0]
+      // Calculate date in SAST
+      const sastNow = new Date(new Date().getTime() + sastOffset)
+      const sastDate = new Date(sastNow.getFullYear(), sastNow.getMonth(), sastNow.getDate() - i)
       
-      const dayCalls = calls?.filter(call => 
-        call.created_at.startsWith(dateStr)
-      ) || []
+      // Get UTC range for this SAST date
+      const startOfDayUTC = new Date(sastDate.getTime() - sastOffset)
+      const endOfDayUTC = new Date(startOfDayUTC.getTime() + 24 * 60 * 60 * 1000)
+      
+      const dayCalls = calls?.filter(call => {
+        const callDate = new Date(call.created_at)
+        return callDate >= startOfDayUTC && callDate < endOfDayUTC
+      }) || []
       
       const successfulCalls = dayCalls.filter(call => 
         call.call_status === 'completed'
       ).length
 
       dailyData.push({
-        date: dateStr,
+        date: sastDate.toISOString().split('T')[0], // Use SAST date for display
         calls: dayCalls.length,
         success: successfulCalls
       })

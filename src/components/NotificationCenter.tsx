@@ -4,6 +4,7 @@ import { BellIcon, XMarkIcon, CheckIcon, PhoneIcon, ClockIcon } from '@heroicons
 import { useAuth } from '@/contexts/AuthContext'
 import CallLogModal from '@/components/modals/CallLogModal'
 import { CreateCallLogRequest } from '@/types'
+import { throttledApiCall } from '@/lib/requestThrottle'
 
 interface Notification {
   id: string
@@ -50,50 +51,52 @@ export default function NotificationCenter() {
       const token = localStorage.getItem('token')
       if (!token) return
 
-      const response = await fetch('/api/notifications?include_client=true', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      const data = await throttledApiCall(
+        '/api/notifications?include_client=true',
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        },
+        'notifications-with-clients',
+        30000 // Cache for 30 seconds
+      )
+
+      setNotifications(data.notifications || [])
+      setUnreadCount(data.unread_count || 0)
+      
+      // Check for callback notifications that are due soon or overdue
+      const now = new Date()
+      const oneMinuteFromNow = new Date(now.getTime() + 60000) // 1 minute from now
+      
+      // Find callbacks that are due within 1 minute or overdue
+      const urgentCallbacks = (data.notifications || []).filter((notif: Notification) => 
+        notif.type === 'callback' && 
+        !notif.is_read &&
+        notif.scheduled_for &&
+        new Date(notif.scheduled_for) <= oneMinuteFromNow
+      )
+
+      // Show toast for callbacks that are due now (not just 1 minute warning)
+      const newCallbacks = urgentCallbacks.filter((notif: Notification) => 
+        !notif.is_sent &&
+        new Date(notif.scheduled_for!) <= now
+      )
+
+      // Show toast notifications for due callbacks (only if not already sent)
+      newCallbacks.forEach((notif: Notification) => {
+        showToast({
+          id: notif.id,
+          type: 'callback',
+          title: notif.title,
+          message: notif.message,
+          duration: 10000 // 10 seconds for callback notifications
+        })
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        setNotifications(data.notifications || [])
-        setUnreadCount(data.unread_count || 0)
-        
-        // Check for callback notifications that are due soon or overdue
-        const now = new Date()
-        const oneMinuteFromNow = new Date(now.getTime() + 60000) // 1 minute from now
-        
-        // Find callbacks that are due within 1 minute or overdue
-        const urgentCallbacks = (data.notifications || []).filter((notif: Notification) => 
-          notif.type === 'callback' && 
-          !notif.is_read &&
-          notif.scheduled_for &&
-          new Date(notif.scheduled_for) <= oneMinuteFromNow
-        )
-
-        // Show toast for callbacks that are due now (not just 1 minute warning)
-        const newCallbacks = urgentCallbacks.filter((notif: Notification) => 
-          !notif.is_sent &&
-          new Date(notif.scheduled_for!) <= now
-        )
-
-        // Show toast notifications for due callbacks (only if not already sent)
-        newCallbacks.forEach((notif: Notification) => {
-          showToast({
-            id: notif.id,
-            type: 'callback',
-            title: notif.title,
-            message: notif.message,
-            duration: 10000 // 10 seconds for callback notifications
-          })
-        })
-
-        // Mark displayed callback notifications as sent to prevent duplicates
-        if (newCallbacks.length > 0) {
-          markNotificationsAsSent(newCallbacks.map((n: Notification) => n.id))
-        }
+      // Mark displayed callback notifications as sent to prevent duplicates
+      if (newCallbacks.length > 0) {
+        markNotificationsAsSent(newCallbacks.map((n: Notification) => n.id))
       }
     } catch (error) {
       console.error('Error fetching notifications:', error)
@@ -192,10 +195,13 @@ export default function NotificationCenter() {
     setToasts(prev => prev.filter(toast => toast.id !== toastId))
   }
 
-  const handleCallClient = (notification: Notification, event: React.MouseEvent) => {
+  const handleCallClient = async (notification: Notification, event: React.MouseEvent) => {
     event.stopPropagation() // Prevent marking as read
     
     if (notification.clients) {
+      // Simple workflow: Always open call modal like clicking phone emoji
+      // The modal will handle the 3CX call and callback context
+      
       setSelectedClient(notification.clients)
       setShowCallModal(true)
       setIsOpen(false) // Close notification dropdown
@@ -203,6 +209,18 @@ export default function NotificationCenter() {
       // Mark notification as read when user initiates call
       if (!notification.is_read) {
         markAsRead(notification.id)
+      }
+      
+      // Store callback context for the modal
+      if (notification.type === 'callback') {
+        const isOverdue = isCallbackOverdue(notification)
+        localStorage.setItem('current_callback_context', JSON.stringify({
+          notificationId: notification.id,
+          priority: isOverdue ? 'overdue' : 'urgent',
+          clientId: notification.clients.id,
+          clientName: notification.clients.principal_key_holder,
+          phoneNumber: notification.clients.telephone_cell
+        }))
       }
     }
   }
@@ -258,18 +276,20 @@ export default function NotificationCenter() {
     }
   }
 
-  // Function to remove notification after callback call
+  // Enhanced function to remove notification after callback call
   const removeNotificationForClient = async (clientId: string) => {
     try {
       const token = localStorage.getItem('token')
       
-      // Find notifications for this client
+      // Find all callback notifications for this client (both read and unread)
       const clientNotifications = notifications.filter(n => 
-        n.client_id === clientId && n.type === 'callback' && !n.is_read
+        n.client_id === clientId && n.type === 'callback'
       )
       
       if (clientNotifications.length > 0) {
         const notificationIds = clientNotifications.map(n => n.id)
+        
+        console.log(`🗑️ Removing ${notificationIds.length} callback notifications for client ${clientId}:`, notificationIds)
         
         // Delete the notifications
         const response = await fetch('/api/notifications', {
@@ -282,8 +302,21 @@ export default function NotificationCenter() {
         })
         
         if (response.ok) {
-          console.log('Callback notifications removed after successful call')
+          console.log('✅ Callback notifications removed successfully after call completion')
+          
+          // Update local state immediately
+          setNotifications(prev => 
+            prev.filter(n => !notificationIds.includes(n.id))
+          )
+          
+          // Update unread count
+          const removedUnreadCount = clientNotifications.filter(n => !n.is_read).length
+          setUnreadCount(prev => Math.max(0, prev - removedUnreadCount))
+        } else {
+          console.error('❌ Failed to remove callback notifications:', await response.json())
         }
+      } else {
+        console.log('ℹ️ No callback notifications found for client', clientId)
       }
     } catch (error) {
       console.error('Error removing notifications:', error)
@@ -366,7 +399,19 @@ export default function NotificationCenter() {
     if (user) {
       fetchNotifications()
       const interval = setInterval(fetchNotifications, 30000)
-      return () => clearInterval(interval)
+      
+      // Listen for callback deletion events
+      const handleCallbackDeletion = (event: CustomEvent) => {
+        console.log('🔄 Callback notifications deleted, refreshing notification center:', event.detail)
+        fetchNotifications() // Refresh notifications immediately
+      }
+      
+      window.addEventListener('callbackNotificationsDeleted', handleCallbackDeletion as EventListener)
+      
+      return () => {
+        clearInterval(interval)
+        window.removeEventListener('callbackNotificationsDeleted', handleCallbackDeletion as EventListener)
+      }
     }
   }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -459,14 +504,19 @@ export default function NotificationCenter() {
                             <button
                               onClick={(e) => handleCallClient(notification, e)}
                               className={`ml-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md ${
-                                isOverdue ? 'bg-red-600 hover:bg-red-700 text-white animate-pulse border-2 border-red-700' :
+                                isOverdue ? 'bg-red-600 hover:bg-red-700 text-white animate-pulse border-2 border-red-700 relative overflow-hidden' :
                                 isUrgent ? 'bg-orange-600 hover:bg-orange-700 text-white border-2 border-orange-700' :
                                 'bg-blue-600 hover:bg-blue-700 text-white border-2 border-blue-700'
                               }`}
                               title={`Call ${notification.clients.principal_key_holder}`}
                             >
                               <PhoneIcon className="w-4 h-4 inline mr-2" />
-                              {isOverdue ? 'CALL NOW' : isUrgent ? 'Call Soon' : 'Call'}
+                              {isOverdue ? (
+                                <>
+                                  CALL NOW
+                                  <span className="absolute inset-0 bg-white opacity-20 animate-ping"></span>
+                                </>
+                              ) : isUrgent ? 'Call Soon' : 'Call'}
                             </button>
                           )}
                         </div>

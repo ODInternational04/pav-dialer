@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import NotificationCenter from '@/components/NotificationCenter'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { throttledApiCall, debounce } from '@/lib/requestThrottle'
 import { 
   HomeIcon, 
   UsersIcon, 
@@ -14,10 +15,11 @@ import {
   ClipboardDocumentListIcon,
   BellIcon,
   ChartBarIcon,
-  Cog6ToothIcon,
+  CogIcon,
   ArrowRightOnRectangleIcon,
   ArrowPathIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  ChatBubbleLeftIcon
 } from '@heroicons/react/24/outline'
 
 interface SidebarProps {
@@ -36,37 +38,42 @@ export default function DashboardLayout({ children }: SidebarProps) {
     router.push('/login')
   }
 
-  // Fetch callback count
-  const fetchCallbackCount = async () => {
+  // Fetch callback count with throttling
+  const fetchCallbackCount = useCallback(async () => {
     if (!user) return
     
     try {
       const token = localStorage.getItem('token')
       if (!token) return
 
-      const response = await fetch('/api/notifications?type=callback&isRead=false', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
+      const data = await throttledApiCall(
+        '/api/notifications?type=callback&isRead=false',
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        },
+        'dashboard-callback-count',
+        60000 // Cache for 1 minute
+      )
 
-      if (response.ok) {
-        const data = await response.json()
-        setCallbackCount(data.notifications?.length || 0)
-      }
+      setCallbackCount(data.notifications?.length || 0)
     } catch (error) {
       console.error('Error fetching callback count:', error)
     }
-  }
+  }, [user])
 
-  // Poll for callback count every 30 seconds
+  // Poll for callback count every 2 minutes (reduced frequency)
   useEffect(() => {
     if (user) {
-      fetchCallbackCount()
-      const interval = setInterval(fetchCallbackCount, 30000)
+      // Create debounced version
+      const debouncedFetch = debounce(fetchCallbackCount, 3000)
+      
+      fetchCallbackCount() // Initial call
+      const interval = setInterval(debouncedFetch, 120000) // 2 minutes
       return () => clearInterval(interval)
     }
-  }, [user])
+  }, [user, fetchCallbackCount])
 
   const adminNavItems = [
     { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
@@ -75,8 +82,9 @@ export default function DashboardLayout({ children }: SidebarProps) {
     { name: 'Clients', href: '/dashboard/clients', icon: ClipboardDocumentListIcon },
     { name: 'Callbacks', href: '/dashboard/callbacks', icon: ExclamationTriangleIcon, badge: callbackCount },
     { name: 'Call Logs', href: '/dashboard/calls', icon: PhoneIcon },
+    { name: 'Customer Feedback', href: '/dashboard/customer-feedback', icon: ChatBubbleLeftIcon },
     { name: 'Reports', href: '/dashboard/reports', icon: ChartBarIcon },
-    { name: 'Settings', href: '/dashboard/settings', icon: Cog6ToothIcon },
+    { name: '3CX Settings', href: '/dashboard/threecx-settings', icon: CogIcon },
   ]
 
   const userNavItems = [
@@ -90,17 +98,17 @@ export default function DashboardLayout({ children }: SidebarProps) {
 
   return (
     <div className="flex h-screen bg-gray-50">
-      {/* Sidebar */}
-      <div className="flex flex-col w-64 bg-white shadow-medium">
+      {/* Sidebar - Fixed, no scroll */}
+      <div className="flex flex-col w-64 bg-white shadow-medium fixed h-full overflow-hidden">
         {/* Logo */}
-        <div className="flex items-center justify-center h-16 px-4 bg-primary-600">
+        <div className="flex items-center justify-center h-16 px-4 bg-primary-600 flex-shrink-0">
           <h1 className="text-xl font-bold text-white">
             Dialer System
           </h1>
         </div>
 
         {/* User Info */}
-        <div className="p-4 border-b border-gray-200">
+        <div className="p-4 border-b border-gray-200 flex-shrink-0">
           <div className="flex items-center">
             <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
               <span className="text-primary-600 font-semibold text-sm">
@@ -118,8 +126,8 @@ export default function DashboardLayout({ children }: SidebarProps) {
           </div>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 px-4 py-4 space-y-2">
+        {/* Navigation - Scrollable if needed */}
+        <nav className="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
           {navItems.map((item) => {
             const isActive = pathname === item.href
             return (
@@ -141,7 +149,7 @@ export default function DashboardLayout({ children }: SidebarProps) {
         </nav>
 
         {/* Logout */}
-        <div className="p-4 border-t border-gray-200">
+        <div className="p-4 border-t border-gray-200 flex-shrink-0">
           <button
             onClick={handleLogout}
             className="sidebar-link w-full text-left text-danger-600 hover:bg-danger-50 hover:text-danger-700"
@@ -152,8 +160,8 @@ export default function DashboardLayout({ children }: SidebarProps) {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Main Content - Offset for fixed sidebar */}
+      <div className="flex-1 flex flex-col overflow-hidden ml-64">
         {/* Header */}
         <header className="bg-white shadow-soft border-b border-gray-200">
           <div className="px-6 py-4 flex items-center justify-between">

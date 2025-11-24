@@ -29,6 +29,11 @@ export interface Client {
   updated_at: string
   created_by: string
   last_updated_by: string
+  // Enhanced fields for call tracking
+  total_calls?: number
+  last_call_date?: string
+  has_been_called?: boolean
+  call_logs?: any[]
 }
 
 export interface CallLog {
@@ -139,7 +144,7 @@ export interface CreateCallLogRequest {
   call_type: 'outbound' | 'inbound'
   call_status: 'completed' | 'missed' | 'declined' | 'busy' | 'no_answer'
   call_duration?: number
-  notes: string
+  notes?: string
   callback_requested: boolean
   callback_time?: string
 }
@@ -165,4 +170,84 @@ export interface UserPerformanceReport {
   average_call_duration: number
   callbacks_completed: number
   last_active: string
+}
+
+export interface CustomerFeedback {
+  id: string
+  client_id: string
+  user_id: string
+  call_log_id?: string
+  feedback_type: 'complaint' | 'happy' | 'suggestion' | 'general'
+  subject: string
+  notes: string
+  priority: 'low' | 'medium' | 'high' | 'urgent'
+  is_resolved: boolean
+  resolved_by?: string
+  resolved_at?: string
+  resolution_notes?: string
+  created_at: string
+  updated_at: string
+  // Related data from API joins
+  clients?: {
+    id: string
+    box_number: string
+    principal_key_holder: string
+    telephone_cell: string
+    contract_no: string
+  }
+  users?: {
+    id: string
+    first_name: string
+    last_name: string
+    email: string
+  }
+  call_logs?: {
+    id: string
+    call_status: string
+    notes: string
+    created_at: string
+  }
+  resolved_by_user?: {
+    id: string
+    first_name: string
+    last_name: string
+    email: string
+  }
+}
+
+export interface CreateCustomerFeedbackRequest {
+  client_id: string
+  call_log_id?: string
+  feedback_type: 'complaint' | 'happy' | 'suggestion' | 'general'
+  subject: string
+  notes: string
+  priority: 'low' | 'medium' | 'high' | 'urgent'
+}
+
+export interface UpdateCustomerFeedbackRequest extends Partial<CreateCustomerFeedbackRequest> {
+  id: string
+  is_resolved?: boolean
+  resolution_notes?: string
+}
+
+export interface FeedbackStatistics {
+  total_feedback: number
+  complaints_count: number
+  happy_count: number
+  suggestions_count: number
+  general_count: number
+  resolved_count: number
+  pending_count: number
+  high_priority_count: number
+  urgent_priority_count: number
+  average_resolution_time_hours: number
+}
+
+export interface CustomerFeedbackFilters {
+  feedback_type?: 'complaint' | 'happy' | 'suggestion' | 'general' | 'all'
+  priority?: 'low' | 'medium' | 'high' | 'urgent' | 'all'
+  is_resolved?: boolean | 'all'
+  search?: string
+  start_date?: string
+  end_date?: string
 }

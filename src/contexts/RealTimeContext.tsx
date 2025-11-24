@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { useAuth } from './AuthContext'
 import { Notification } from '@/types'
 import { ToastNotification } from '@/components/notifications/NotificationCenter'
+import { throttledApiCall, debounce } from '@/lib/requestThrottle'
 
 interface RealTimeContextType {
   pendingNotifications: Notification[]
@@ -46,51 +47,53 @@ export const RealTimeProvider: React.FC<RealTimeProviderProps> = ({ children }) 
       const token = localStorage.getItem('token')
       if (!token) return
 
-      // Check for pending notifications
-      const notificationsResponse = await fetch('/api/notifications?showPending=true&limit=10', {
-        headers: {
-          Authorization: `Bearer ${token}`,
+      // Use throttled API call for notifications
+      const notificationsData = await throttledApiCall(
+        '/api/notifications?showPending=true&limit=10',
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         },
-      })
+        'realtime-notifications',
+        60000 // Cache for 1 minute
+      )
 
-      if (notificationsResponse.ok) {
-        const notificationsData = await notificationsResponse.json()
-        const newNotifications = notificationsData.notifications || []
-        
-        // Find new notifications that haven't been shown as toast
-        const existingIds = pendingNotifications.map(n => n.id)
-        const reallyNewNotifications = newNotifications.filter(
-          (n: Notification) => !existingIds.includes(n.id) && !n.is_sent
-        )
+      const newNotifications = notificationsData.notifications || []
+      
+      // Find new notifications that haven't been shown as toast
+      const existingIds = pendingNotifications.map(n => n.id)
+      const reallyNewNotifications = newNotifications.filter(
+        (n: Notification) => !existingIds.includes(n.id) && !n.is_sent
+      )
 
-        if (reallyNewNotifications.length > 0) {
-          // Show toast notifications for new notifications
-          reallyNewNotifications.forEach((notification: Notification) => {
-            if (notification.type === 'callback' && new Date(notification.scheduled_for) <= new Date()) {
-              setActiveToasts(prev => [...prev, notification])
-            }
-          })
-
-          // Mark notifications as sent
-          if (reallyNewNotifications.length > 0) {
-            fetch('/api/notifications', {
-              method: 'PUT',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-              },
-              body: JSON.stringify({
-                action: 'markAsSent',
-                notificationIds: reallyNewNotifications.map((n: Notification) => n.id),
-              }),
-            }).catch(console.error)
+      if (reallyNewNotifications.length > 0) {
+        // Show toast notifications for new notifications
+        reallyNewNotifications.forEach((notification: Notification) => {
+          if (notification.type === 'callback' && new Date(notification.scheduled_for) <= new Date()) {
+            setActiveToasts(prev => [...prev, notification])
           }
-        }
+        })
 
-        setPendingNotifications(newNotifications)
-        setIsConnected(true)
-        setLastUpdate(new Date())
+        // Mark notifications as sent (non-blocking)
+        if (reallyNewNotifications.length > 0) {
+          throttledApiCall('/api/notifications', {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              action: 'markAsSent',
+              notificationIds: reallyNewNotifications.map((n: Notification) => n.id),
+            }),
+          }, 'mark-notifications-sent').catch(console.error)
+        }
       }
+
+      setPendingNotifications(newNotifications)
+      setIsConnected(true)
+      setLastUpdate(new Date())
     } catch (error) {
       console.error('Error checking for updates:', error)
       setIsConnected(false)
@@ -108,20 +111,23 @@ export const RealTimeProvider: React.FC<RealTimeProviderProps> = ({ children }) 
     triggerRefresh()
   }
 
-  // Set up polling interval
+  // Set up polling interval with debouncing
   useEffect(() => {
     if (!user) return
 
-    // Initial check
+    // Create debounced function
+    const debouncedCheck = debounce(checkForUpdates, 2000)
+
+    // Initial check (immediate)
     checkForUpdates()
 
-    // Set up polling every 30 seconds
-    const interval = setInterval(checkForUpdates, 30000)
+    // Set up polling every 60 seconds (reduced from 30)
+    const interval = setInterval(debouncedCheck, 60000)
 
     // Check for updates when the page becomes visible again
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        checkForUpdates()
+        debouncedCheck()
       }
     }
 
@@ -133,13 +139,13 @@ export const RealTimeProvider: React.FC<RealTimeProviderProps> = ({ children }) 
     }
   }, [user, checkForUpdates])
 
-  // Auto-refresh data every 2 minutes to ensure all users see updated information
+  // Auto-refresh data every 5 minutes (increased from 2 minutes)
   useEffect(() => {
     if (!user) return
 
     const refreshInterval = setInterval(() => {
       triggerRefresh()
-    }, 120000) // 2 minutes
+    }, 300000) // 5 minutes
 
     return () => clearInterval(refreshInterval)
   }, [user, triggerRefresh])

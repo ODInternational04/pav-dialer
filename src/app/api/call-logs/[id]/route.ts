@@ -2,13 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { verifyToken } from '@/lib/auth'
 
-interface Params {
-  id: string
-}
-
 export async function GET(
   request: NextRequest,
-  { params }: { params: Params }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const token = request.headers.get('Authorization')?.replace('Bearer ', '')
@@ -21,7 +17,7 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
 
-    const { id } = params
+    const { id } = await params
 
     let query = supabase
       .from('call_logs')
@@ -67,7 +63,7 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Params }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const token = request.headers.get('Authorization')?.replace('Bearer ', '')
@@ -80,7 +76,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
 
-    const { id } = params
+    const { id } = await params
     const body = await request.json()
     const {
       call_status,
@@ -90,14 +86,6 @@ export async function PUT(
       callback_time,
       call_ended_at
     } = body
-
-    // Enforce mandatory notes
-    if (notes !== undefined && (!notes || notes.trim().length === 0)) {
-      return NextResponse.json(
-        { error: 'Notes are mandatory for all calls' },
-        { status: 400 }
-      )
-    }
 
     // Validate callback requirements
     if (callback_requested && !callback_time) {
@@ -129,7 +117,7 @@ export async function PUT(
     const updateData: any = {}
     if (call_status !== undefined) updateData.call_status = call_status
     if (call_duration !== undefined) updateData.call_duration = call_duration
-    if (notes !== undefined) updateData.notes = notes.trim()
+    if (notes !== undefined) updateData.notes = notes?.trim() || ''
     if (callback_requested !== undefined) updateData.callback_requested = callback_requested
     if (callback_time !== undefined) updateData.callback_time = callback_time
     if (call_ended_at !== undefined) updateData.call_ended_at = call_ended_at
@@ -212,7 +200,7 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Params }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const token = request.headers.get('Authorization')?.replace('Bearer ', '')
@@ -225,17 +213,17 @@ export async function DELETE(
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
 
-    // Only admin can delete call logs
+    const { id } = await params
     if (decoded.role !== 'admin') {
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 })
     }
 
-    const { id } = params
+    const { id: callLogId } = await params
 
     const { data: callLog, error } = await supabase
       .from('call_logs')
       .delete()
-      .eq('id', id)
+      .eq('id', callLogId)
       .select()
       .single()
 

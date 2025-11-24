@@ -131,7 +131,8 @@ export default function ClientCreateModal({
         onClose()
       } else {
         const error = await response.json()
-        alert(error.error || 'Failed to save client')
+        // Prefer detailed error message when available to help debugging
+        alert(error.details || error.error || 'Failed to save client')
       }
     } catch (error) {
       console.error('Error saving client:', error)
@@ -200,10 +201,11 @@ export default function ClientCreateModal({
                 className={`input ${errors.size ? 'border-red-500' : ''}`}
               >
                 <option value="">Select size</option>
-                <option value="Small">Small</option>
-                <option value="Medium">Medium</option>
-                <option value="Large">Large</option>
-                <option value="Extra Large">Extra Large</option>
+                <option value="A">A</option>
+                <option value="B">B</option>
+                <option value="C">C</option>
+                <option value="D">D</option>
+                <option value="E">E</option>
               </select>
               {errors.size && (
                 <p className="text-red-500 text-sm mt-1">{errors.size}</p>

@@ -2,14 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { verifyToken } from '@/lib/auth'
 
-interface Params {
-  id: string
-}
-
 // Check if a client is available for calling (not currently being called by another user)
 export async function GET(
   request: NextRequest,
-  { params }: { params: Params }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const token = request.headers.get('Authorization')?.replace('Bearer ', '')
@@ -22,7 +18,7 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
 
-    const clientId = params.id
+    const { id: clientId } = await params
 
     // Check if any user is currently calling this client
     const { data: userOnCall, error } = await supabase

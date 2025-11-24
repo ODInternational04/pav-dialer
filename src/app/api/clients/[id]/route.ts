@@ -5,7 +5,7 @@ import { UpdateClientRequest } from '@/types'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authHeader = request.headers.get('authorization')
@@ -26,6 +26,8 @@ export async function GET(
       )
     }
 
+    const { id } = await params
+
     const { data: client, error } = await supabase
       .from('clients')
       .select(`
@@ -33,7 +35,7 @@ export async function GET(
         created_by_user:users!clients_created_by_fkey(first_name, last_name),
         last_updated_by_user:users!clients_last_updated_by_fkey(first_name, last_name)
       `)
-      .eq('id', params.id)
+      .eq('id', id)
       .single()
 
     if (error) {
@@ -55,7 +57,7 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authHeader = request.headers.get('authorization')
@@ -76,6 +78,7 @@ export async function PUT(
       )
     }
 
+    const { id: clientId } = await params
     const body: UpdateClientRequest = await request.json()
     const { id, ...updateData } = body
 
@@ -90,7 +93,7 @@ export async function PUT(
     const { data: updatedClient, error } = await supabase
       .from('clients')
       .update(cleanUpdateData)
-      .eq('id', params.id)
+      .eq('id', clientId)
       .select(`
         *,
         created_by_user:users!clients_created_by_fkey(first_name, last_name),
@@ -121,7 +124,7 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authHeader = request.headers.get('authorization')
@@ -142,10 +145,12 @@ export async function DELETE(
       )
     }
 
+    const { id: clientId } = await params
+
     const { error } = await supabase
       .from('clients')
       .delete()
-      .eq('id', params.id)
+      .eq('id', clientId)
 
     if (error) {
       console.error('Error deleting client:', error)
