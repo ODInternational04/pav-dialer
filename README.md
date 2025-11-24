@@ -250,4 +250,4 @@ This project is for internal use. All rights reserved.
 
 ---
 
-Built with ❤️ using modern web technologies for efficient client management and call tracking.
+
