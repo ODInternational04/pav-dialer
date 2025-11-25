@@ -4,13 +4,25 @@
  */
 
 import { z } from 'zod'
-import DOMPurify from 'isomorphic-dompurify'
 
 /**
  * Sanitizes string input to prevent XSS attacks
+ * Uses a simple approach that works in all environments (Node.js and browser)
  */
 export const sanitizeInput = (input: string): string => {
-  return DOMPurify.sanitize(input.trim())
+  if (!input || typeof input !== 'string') {
+    return ''
+  }
+  
+  // Basic HTML entity encoding to prevent XSS
+  return input
+    .trim()
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/\//g, '&#x2F;')
 }
 
 /**

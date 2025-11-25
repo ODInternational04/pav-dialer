@@ -321,12 +321,9 @@ export const getSessionFromRequest = (request: NextRequest): SessionData | null 
   return validateSession(sessionId)
 }
 
-// Set up automatic cleanup interval
-if (typeof setInterval !== 'undefined') {
-  setInterval(() => {
-    cleanupExpiredSessions()
-  }, SESSION_CONFIG.CLEANUP_INTERVAL)
-}
+// Note: Automatic cleanup is disabled for serverless environments
+// In production, use a cron job or external scheduler to call cleanupExpiredSessions()
+// setInterval doesn't work reliably in serverless functions
 
 // Export session configuration for external use
 export const getSessionConfig = () => ({ ...SESSION_CONFIG })

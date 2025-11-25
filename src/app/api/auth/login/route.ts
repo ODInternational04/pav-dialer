@@ -287,7 +287,6 @@ function cleanupFailedAttempts(): void {
   }
 }
 
-// Clean up failed attempts every 5 minutes
-if (typeof setInterval !== 'undefined') {
-  setInterval(cleanupFailedAttempts, 5 * 60 * 1000)
-}
+// Note: Automatic cleanup is disabled for serverless environments
+// In production, use Redis with TTL or a cron job for cleanup
+// setInterval doesn't work reliably in serverless functions
