@@ -194,7 +194,7 @@ export default function ThreeCXSettingsPage() {
             <div>
               <h3 className="font-medium text-blue-900 mb-2">🚀 Automatic Dialing Features</h3>
               <div className="text-sm text-blue-800 space-y-2">
-                <p>The dialer system now attempts automatic call initiation using multiple methods:</p>
+                <p>The IBV Dialer now attempts automatic call initiation using multiple methods:</p>
                 <ul className="list-disc list-inside space-y-1 ml-2">
                   <li><strong>API Calls:</strong> Attempts to use 3CX API endpoints for direct dialing</li>
                   <li><strong>URL Injection:</strong> Tries various 3CX web client URL formats</li>

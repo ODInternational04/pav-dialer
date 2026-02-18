@@ -19,7 +19,8 @@ import {
   ArrowRightOnRectangleIcon,
   ArrowPathIcon,
   ExclamationTriangleIcon,
-  ChatBubbleLeftIcon
+  ChatBubbleLeftIcon,
+  RectangleStackIcon
 } from '@heroicons/react/24/outline'
 
 interface SidebarProps {
@@ -79,6 +80,7 @@ export default function DashboardLayout({ children }: SidebarProps) {
     { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
     { name: 'Users', href: '/dashboard/users', icon: UsersIcon },
     { name: 'User Status', href: '/dashboard/user-status', icon: UsersIcon },
+    { name: 'Campaigns', href: '/dashboard/campaigns', icon: RectangleStackIcon },
     { name: 'Clients', href: '/dashboard/clients', icon: ClipboardDocumentListIcon },
     { name: 'Callbacks', href: '/dashboard/callbacks', icon: ExclamationTriangleIcon, badge: callbackCount },
     { name: 'Call Logs', href: '/dashboard/calls', icon: PhoneIcon },
@@ -89,6 +91,7 @@ export default function DashboardLayout({ children }: SidebarProps) {
 
   const userNavItems = [
     { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
+    { name: 'Campaigns', href: '/dashboard/campaigns', icon: RectangleStackIcon },
     { name: 'Clients', href: '/dashboard/clients', icon: ClipboardDocumentListIcon },
     { name: 'Callbacks', href: '/dashboard/callbacks', icon: ExclamationTriangleIcon, badge: callbackCount },
     { name: 'My Calls', href: '/dashboard/calls', icon: PhoneIcon },
@@ -103,7 +106,7 @@ export default function DashboardLayout({ children }: SidebarProps) {
         {/* Logo */}
         <div className="flex items-center justify-center h-16 px-4 bg-primary-600 flex-shrink-0">
           <h1 className="text-xl font-bold text-white">
-            Dialer System
+            IBV Dialer
           </h1>
         </div>
 

@@ -208,10 +208,10 @@ export function middleware(request: NextRequest) {
     const csp = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-eval' 'unsafe-inline'", // Note: unsafe-inline should be removed in production
-      "style-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "img-src 'self' data: https:",
       "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
-      "font-src 'self'",
+      "font-src 'self' https://fonts.gstatic.com",
       "object-src 'none'",
       "media-src 'self'",
       "frame-src 'none'",

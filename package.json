@@ -39,6 +39,7 @@
     "tailwindcss": "^3.3.0",
     "typescript": "^5",
     "uuid": "^9.0.1",
+    "xlsx": "^0.18.5",
     "zod": "^4.1.12"
   },
   "devDependencies": {

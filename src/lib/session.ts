@@ -1,6 +1,6 @@
 /**
  * Session Management System
- * Provides secure session handling and tracking for the dialer system
+ * Provides secure session handling and tracking for the IBV Dialer
  */
 
 import { NextRequest } from 'next/server'

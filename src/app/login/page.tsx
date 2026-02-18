@@ -37,7 +37,7 @@ export default function LoginPage() {
         <div className="card p-8">
           <div className="text-center">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              Dialer System
+              IBV Dialer
             </h1>
             <p className="text-gray-600 mb-8">
               Sign in to your account

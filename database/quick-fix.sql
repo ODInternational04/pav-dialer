@@ -1,4 +1,4 @@
--- Quick Database Fix for Dialer System Issues
+-- Quick Database Fix for IBV Dialer Issues
 -- Run this in your Supabase SQL editor to fix current errors
 
 -- Step 1: Add missing columns to users table
@@ -100,4 +100,4 @@ CREATE INDEX IF NOT EXISTS idx_users_is_on_call ON users(is_on_call);
 CREATE INDEX IF NOT EXISTS idx_users_current_call ON users(current_call_client_id);
 CREATE INDEX IF NOT EXISTS idx_users_call_started ON users(call_started_at);
 
--- Done! Your database should now work properly with the dialer system.
+-- Done! Your database should now work properly with the IBV Dialer.

@@ -107,7 +107,7 @@ Please review this feedback in the admin dashboard:
 ${process.env.NEXT_PUBLIC_APP_URL}/dashboard/customer-feedback
 
 ---
-This is an automated notification from the Dialer System.
+This is an automated notification from the IBV Dialer.
     `.trim()
 
     const html = `
@@ -165,7 +165,7 @@ This is an automated notification from the Dialer System.
 
     <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;">
     <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
-      This is an automated notification from the Dialer System.<br>
+      This is an automated notification from the IBV Dialer.<br>
       Please do not reply to this email.
     </p>
   </div>
