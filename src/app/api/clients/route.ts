@@ -331,12 +331,36 @@ export async function POST(request: NextRequest) {
       }
 
       // Create client with validated data
+      // For Gold clients, remove vault-specific fields to avoid database errors
+      const clientData = validatedData.client_type === 'gold' 
+        ? {
+            client_type: validatedData.client_type,
+            principal_key_holder: validatedData.principal_key_holder,
+            principal_key_holder_email_address: validatedData.principal_key_holder_email_address,
+            telephone_cell: validatedData.telephone_cell,
+            telephone_home: validatedData.telephone_home || '',
+            notes: validatedData.notes || '',
+            campaign_id: validatedData.campaign_id,
+            gender: validatedData.gender,
+            assigned_to: validatedData.assigned_to,
+            custom_fields: validatedData.custom_fields,
+            // Set vault fields to default/null values for Gold clients
+            box_number: `GOLD-${Date.now()}`, // Auto-generate unique box number
+            size: 'N/A',
+            contract_no: `GOLD-${Date.now()}`, // Auto-generate unique contract number
+            principal_key_holder_id_number: 'N/A',
+            contract_start_date: new Date().toISOString().split('T')[0],
+            contract_end_date: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 year from now
+            occupation: 'N/A',
+          }
+        : validatedData
+
       const now = new Date().toISOString()
       const { data: newClient, error: insertError } = await supabase
         .from('clients')
         .insert({
-          ...validatedData,
-          notes: validatedData.notes || '',
+          ...clientData,
+          notes: clientData.notes || '',
           created_by: payload.userId,
           last_updated_by: payload.userId,
           created_at: now,
