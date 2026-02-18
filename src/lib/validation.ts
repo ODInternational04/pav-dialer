@@ -45,9 +45,7 @@ export const validatePhone = (phone: string): boolean => {
  * Client validation schema - supports both Vault and Gold client types
  */
 export const clientValidationSchema = z.object({
-  client_type: z.enum(['vault', 'gold'], {
-    errorMap: () => ({ message: 'Client type must be either vault or gold' })
-  }),
+  client_type: z.enum(['vault', 'gold']),
   
   // Vault-specific fields (optional for Gold clients)
   box_number: z.string()
@@ -125,7 +123,7 @@ export const clientValidationSchema = z.object({
   assigned_to: z.string()
     .uuid('Invalid assigned user ID format')
     .optional(),
-  custom_fields: z.record(z.any()).optional()
+  custom_fields: z.record(z.string(), z.any()).optional()
 }).refine(
   (data) => {
     // For vault clients, ensure all vault-specific fields are provided

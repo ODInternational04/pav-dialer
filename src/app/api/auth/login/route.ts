@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
       // Find user by email
       const { data: user, error: userError } = await supabase
         .from('users')
-        .select('id, email, password_hash, first_name, last_name, role, is_active, last_login, created_at')
+        .select('id, email, password_hash, first_name, last_name, role, is_active, last_login, created_at, can_access_vault_clients, can_access_gold_clients')
         .eq('email', email.toLowerCase())
         .single()
 
@@ -165,6 +165,8 @@ export async function POST(request: NextRequest) {
         last_name: user.last_name,
         role: user.role,
         is_active: user.is_active,
+        can_access_vault_clients: user.can_access_vault_clients ?? true,
+        can_access_gold_clients: user.can_access_gold_clients ?? false,
         last_login: loginTime,
         created_at: user.created_at,
         updated_at: loginTime
