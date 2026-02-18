@@ -25,9 +25,11 @@ INSERT INTO clients (
     contract_start_date,
     contract_end_date,
     created_at,
-    updated_at
-) VALUES 
-(
+    updated_at,
+    created_by,
+    last_updated_by
+) 
+SELECT 
     'gold',
     'John Gold Customer',
     'john.gold@example.com',
@@ -41,9 +43,14 @@ INSERT INTO clients (
     NOW(),
     NOW() + INTERVAL '1 year',
     NOW(),
-    NOW()
-),
-(
+    NOW(),
+    u.id,
+    u.id
+FROM users u WHERE u.email = 'goldsales1@ibvglobal.com'
+
+UNION ALL
+
+SELECT 
     'gold',
     'Sarah VIP Member',
     'sarah.vip@example.com',
@@ -57,9 +64,14 @@ INSERT INTO clients (
     NOW(),
     NOW() + INTERVAL '1 year',
     NOW(),
-    NOW()
-),
-(
+    NOW(),
+    u.id,
+    u.id
+FROM users u WHERE u.email = 'goldsales1@ibvglobal.com'
+
+UNION ALL
+
+SELECT 
     'gold',
     'Michael Elite',
     'michael.elite@example.com',
@@ -73,8 +85,10 @@ INSERT INTO clients (
     NOW(),
     NOW() + INTERVAL '1 year',
     NOW(),
-    NOW()
-);
+    NOW(),
+    u.id,
+    u.id
+FROM users u WHERE u.email = 'goldsales1@ibvglobal.com';
 
 -- 3. Verify setup
 SELECT 

@@ -103,7 +103,9 @@ INSERT INTO clients (
     contract_start_date,
     contract_end_date,
     created_at,
-    updated_at
+    updated_at,
+    created_by,
+    last_updated_by
 )
 SELECT 
     'gold',
@@ -119,8 +121,12 @@ SELECT
     NOW(),
     NOW() + INTERVAL '1 year',
     NOW(),
-    NOW()
-WHERE NOT EXISTS (SELECT 1 FROM clients WHERE client_type = 'gold' LIMIT 1)
+    NOW(),
+    u.id,
+    u.id
+FROM users u 
+WHERE u.email = 'goldsales1@ibvglobal.com'
+AND NOT EXISTS (SELECT 1 FROM clients WHERE client_type = 'gold' LIMIT 1)
 
 UNION ALL
 
@@ -138,8 +144,12 @@ SELECT
     NOW(),
     NOW() + INTERVAL '1 year',
     NOW(),
-    NOW()
-WHERE NOT EXISTS (SELECT 1 FROM clients WHERE client_type = 'gold' LIMIT 1)
+    NOW(),
+    u.id,
+    u.id
+FROM users u 
+WHERE u.email = 'goldsales1@ibvglobal.com'
+AND NOT EXISTS (SELECT 1 FROM clients WHERE client_type = 'gold' LIMIT 1)
 
 UNION ALL
 
@@ -157,8 +167,12 @@ SELECT
     NOW(),
     NOW() + INTERVAL '1 year',
     NOW(),
-    NOW()
-WHERE NOT EXISTS (SELECT 1 FROM clients WHERE client_type = 'gold' LIMIT 1);
+    NOW(),
+    u.id,
+    u.id
+FROM users u 
+WHERE u.email = 'goldsales1@ibvglobal.com'
+AND NOT EXISTS (SELECT 1 FROM clients WHERE client_type = 'gold' LIMIT 1);
 
 -- STEP 5: Final verification
 DO $$
