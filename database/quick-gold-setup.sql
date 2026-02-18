@@ -74,8 +74,7 @@ INSERT INTO clients (
     NOW() + INTERVAL '1 year',
     NOW(),
     NOW()
-)
-ON CONFLICT (box_number) DO NOTHING;
+);
 
 -- 3. Verify setup
 SELECT 
