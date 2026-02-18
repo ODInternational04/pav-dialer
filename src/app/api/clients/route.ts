@@ -44,21 +44,10 @@ export async function GET(request: NextRequest) {
     const canAccessVault = payload.can_access_vault_clients ?? true
     const canAccessGold = payload.can_access_gold_clients ?? false
     
-    // Debug logging
-    console.log('🔍 Client Access Permissions:', {
-      userId: payload.userId,
-      email: payload.email,
-      canAccessVault,
-      canAccessGold,
-      clientTypeParam: clientType
-    })
-    
     // Build allowed client types array
     const allowedClientTypes: string[] = []
     if (canAccessVault) allowedClientTypes.push('vault')
     if (canAccessGold) allowedClientTypes.push('gold')
-    
-    console.log('✅ Allowed client types:', allowedClientTypes)
     
     // If user has no access to any client type, return empty result
     if (allowedClientTypes.length === 0) {
@@ -91,10 +80,6 @@ export async function GET(request: NextRequest) {
       
       // Note: Users can still see clients even without campaign assignments
       // Campaign filtering will be applied in queries if campaigns are assigned
-      console.log('📋 User campaign assignments:', {
-        userId: payload.userId,
-        campaignCount: allowedCampaignIds.length
-      })
     }
 
     let clientsData
@@ -117,12 +102,10 @@ export async function GET(request: NextRequest) {
         // Apply user permission-based client type filtering
         if (allowedClientTypes.length === 1) {
           // User can only access one type
-          console.log('🔒 Filtering to single client type:', allowedClientTypes[0])
           query = query.eq('client_type', allowedClientTypes[0])
         } else if (allowedClientTypes.length === 2) {
           // User can access both types - apply requested filter if specified
           if (clientType !== 'all') {
-            console.log('🔒 Filtering to requested client type:', clientType)
             query = query.eq('client_type', clientType)
           }
         }
@@ -138,15 +121,7 @@ export async function GET(request: NextRequest) {
           .range(start, end)
           .order(mapSortByToColumn(sortBy), { ascending: sortOrder === 'asc' })
 
-        if (callError) {
-          console.error('❌ Database error fetching clients:', callError)
-          throw callError
-        }
-        
-        console.log('📊 Clients fetched:', {
-          count: count,
-          dataLength: clientsWithCalls?.length || 0
-        })
+        if (callError) throw callError
 
         if (search && clientsWithCalls) {
           const filteredClients = clientsWithCalls.filter(client =>
