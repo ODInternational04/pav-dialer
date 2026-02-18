@@ -99,7 +99,11 @@ INSERT INTO clients (
     contract_no,
     size,
     principal_key_holder_id_number,
-    occupation
+    occupation,
+    contract_start_date,
+    contract_end_date,
+    created_at,
+    updated_at
 )
 SELECT 
     'gold',
@@ -111,7 +115,11 @@ SELECT
     'GOLD-' || EXTRACT(EPOCH FROM NOW())::TEXT,
     'N/A',
     'N/A',
-    'N/A'
+    'N/A',
+    NOW(),
+    NOW() + INTERVAL '1 year',
+    NOW(),
+    NOW()
 WHERE NOT EXISTS (SELECT 1 FROM clients WHERE client_type = 'gold' LIMIT 1)
 
 UNION ALL
@@ -126,7 +134,11 @@ SELECT
     'GOLD-' || (EXTRACT(EPOCH FROM NOW()) + 1)::TEXT,
     'N/A',
     'N/A',
-    'N/A'
+    'N/A',
+    NOW(),
+    NOW() + INTERVAL '1 year',
+    NOW(),
+    NOW()
 WHERE NOT EXISTS (SELECT 1 FROM clients WHERE client_type = 'gold' LIMIT 1)
 
 UNION ALL
@@ -141,7 +153,11 @@ SELECT
     'GOLD-' || (EXTRACT(EPOCH FROM NOW()) + 2)::TEXT,
     'N/A',
     'N/A',
-    'N/A'
+    'N/A',
+    NOW(),
+    NOW() + INTERVAL '1 year',
+    NOW(),
+    NOW()
 WHERE NOT EXISTS (SELECT 1 FROM clients WHERE client_type = 'gold' LIMIT 1);
 
 -- STEP 5: Final verification

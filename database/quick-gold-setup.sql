@@ -22,7 +22,10 @@ INSERT INTO clients (
     size,
     principal_key_holder_id_number,
     occupation,
-    created_at
+    contract_start_date,
+    contract_end_date,
+    created_at,
+    updated_at
 ) VALUES 
 (
     'gold',
@@ -35,6 +38,9 @@ INSERT INTO clients (
     'N/A',
     'N/A',
     'N/A',
+    NOW(),
+    NOW() + INTERVAL '1 year',
+    NOW(),
     NOW()
 ),
 (
@@ -48,6 +54,9 @@ INSERT INTO clients (
     'N/A',
     'N/A',
     'N/A',
+    NOW(),
+    NOW() + INTERVAL '1 year',
+    NOW(),
     NOW()
 ),
 (
@@ -61,9 +70,12 @@ INSERT INTO clients (
     'N/A',
     'N/A',
     'N/A',
+    NOW(),
+    NOW() + INTERVAL '1 year',
+    NOW(),
     NOW()
 )
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (box_number) DO NOTHING;
 
 -- 3. Verify setup
 SELECT 
