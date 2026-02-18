@@ -44,8 +44,13 @@ type SortField = 'created_at' | 'name' | 'phone' | 'contract' | 'box_number' | '
 type SortOrder = 'asc' | 'desc'
 
 export default function ClientsPage() {
-  const { isAdmin } = useAuth()
+  const { isAdmin, user } = useAuth()
   const { refreshTrigger } = useRealTime()
+  
+  // Determine user's client access permissions
+  const canAccessVault = user?.can_access_vault_clients ?? true
+  const canAccessGold = user?.can_access_gold_clients ?? false
+  
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [searchLoading, setSearchLoading] = useState(false)
@@ -87,6 +92,22 @@ export default function ClientsPage() {
 
     return () => clearTimeout(timer)
   }, [searchInput])
+
+  // Set initial client type filter based on user permissions
+  useEffect(() => {
+    if (user) {
+      if (canAccessVault && canAccessGold) {
+        // User can access both, keep 'all'
+        setClientTypeFilter('all')
+      } else if (canAccessVault) {
+        // User can only access vault clients
+        setClientTypeFilter('vault')
+      } else if (canAccessGold) {
+        // User can only access gold clients
+        setClientTypeFilter('gold')
+      }
+    }
+  }, [user, canAccessVault, canAccessGold])
 
   // Restore focus to search input after search operations
   useEffect(() => {
@@ -622,36 +643,42 @@ export default function ClientsPage() {
         {/* Client Type Tabs */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-1 mb-4">
           <div className="flex space-x-2">
-            <button
-              onClick={() => { setClientTypeFilter('all'); setCurrentPage(1) }}
-              className={`flex-1 py-2 px-4 rounded-md font-medium transition-all ${
-                clientTypeFilter === 'all'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              All Clients
-            </button>
-            <button
-              onClick={() => { setClientTypeFilter('vault'); setCurrentPage(1) }}
-              className={`flex-1 py-2 px-4 rounded-md font-medium transition-all ${
-                clientTypeFilter === 'vault'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              🔒 Vault Clients
-            </button>
-            <button
-              onClick={() => { setClientTypeFilter('gold'); setCurrentPage(1) }}
-              className={`flex-1 py-2 px-4 rounded-md font-medium transition-all ${
-                clientTypeFilter === 'gold'
-                  ? 'bg-yellow-600 text-white shadow-sm'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              ⭐ Gold Clients
-            </button>
+            {canAccessVault && canAccessGold && (
+              <button
+                onClick={() => { setClientTypeFilter('all'); setCurrentPage(1) }}
+                className={`flex-1 py-2 px-4 rounded-md font-medium transition-all ${
+                  clientTypeFilter === 'all'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                All Clients
+              </button>
+            )}
+            {canAccessVault && (
+              <button
+                onClick={() => { setClientTypeFilter('vault'); setCurrentPage(1) }}
+                className={`flex-1 py-2 px-4 rounded-md font-medium transition-all ${
+                  clientTypeFilter === 'vault'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                🔒 Vault Clients
+              </button>
+            )}
+            {canAccessGold && (
+              <button
+                onClick={() => { setClientTypeFilter('gold'); setCurrentPage(1) }}
+                className={`flex-1 py-2 px-4 rounded-md font-medium transition-all ${
+                  clientTypeFilter === 'gold'
+                    ? 'bg-yellow-600 text-white shadow-sm'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                ⭐ Gold Clients
+              </button>
+            )}
           </div>
         </div>
 

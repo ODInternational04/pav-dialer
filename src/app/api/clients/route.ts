@@ -39,6 +39,31 @@ export async function GET(request: NextRequest) {
     const sortBy = validateSortBy(searchParams.get('sortBy') || 'created_at')
     const sortOrder = validateSortOrder(searchParams.get('sortOrder') || 'desc')
     const campaignId = searchParams.get('campaign_id') || ''
+
+    // Determine which client types the user can access based on their permissions
+    const canAccessVault = payload.can_access_vault_clients ?? true
+    const canAccessGold = payload.can_access_gold_clients ?? false
+    
+    // Build allowed client types array
+    const allowedClientTypes: string[] = []
+    if (canAccessVault) allowedClientTypes.push('vault')
+    if (canAccessGold) allowedClientTypes.push('gold')
+    
+    // If user has no access to any client type, return empty result
+    if (allowedClientTypes.length === 0) {
+      return NextResponse.json({
+        clients: [],
+        totalCount: 0,
+        page: 1,
+        limit,
+        totalPages: 0,
+        metadata: {
+          requestId: request.headers.get('x-request-id'),
+          timestamp: new Date().toISOString(),
+          userId: payload.userId
+        }
+      })
+    }
     
     const start = (page - 1) * limit
     const end = start + limit - 1
@@ -87,9 +112,15 @@ export async function GET(request: NextRequest) {
           `, { count: 'exact' })
           .not('call_logs', 'is', null)
         
-        // Apply client type filtering
-        if (clientType !== 'all') {
-          query = query.eq('client_type', clientType)
+        // Apply user permission-based client type filtering
+        if (allowedClientTypes.length === 1) {
+          // User can only access one type
+          query = query.eq('client_type', allowedClientTypes[0])
+        } else if (allowedClientTypes.length === 2) {
+          // User can access both types - apply requested filter if specified
+          if (clientType !== 'all') {
+            query = query.eq('client_type', clientType)
+          }
         }
         
         // Apply campaign filtering
@@ -127,9 +158,15 @@ export async function GET(request: NextRequest) {
             campaigns(id, name, department, status)
           `)
         
-        // Apply client type filtering
-        if (clientType !== 'all') {
-          clientQuery = clientQuery.eq('client_type', clientType)
+        // Apply user permission-based client type filtering
+        if (allowedClientTypes.length === 1) {
+          // User can only access one type
+          clientQuery = clientQuery.eq('client_type', allowedClientTypes[0])
+        } else if (allowedClientTypes.length === 2) {
+          // User can access both types - apply requested filter if specified
+          if (clientType !== 'all') {
+            clientQuery = clientQuery.eq('client_type', clientType)
+          }
         }
         
         // Apply campaign filtering
@@ -180,9 +217,15 @@ export async function GET(request: NextRequest) {
             call_logs(id, call_status, created_at, call_type)
           `, { count: 'exact' })
         
-        // Apply client type filtering
-        if (clientType !== 'all') {
-          allQuery = allQuery.eq('client_type', clientType)
+        // Apply user permission-based client type filtering
+        if (allowedClientTypes.length === 1) {
+          // User can only access one type
+          allQuery = allQuery.eq('client_type', allowedClientTypes[0])
+        } else if (allowedClientTypes.length === 2) {
+          // User can access both types - apply requested filter if specified
+          if (clientType !== 'all') {
+            allQuery = allQuery.eq('client_type', clientType)
+          }
         }
         
         // Apply campaign filtering
