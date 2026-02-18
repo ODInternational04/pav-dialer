@@ -89,21 +89,12 @@ export async function GET(request: NextRequest) {
       
       allowedCampaignIds = userCampaigns?.map(uc => uc.campaign_id) || []
       
-      // If user has no campaigns assigned, return empty result
-      if (allowedCampaignIds.length === 0) {
-        return NextResponse.json({
-          clients: [],
-          totalCount: 0,
-          page,
-          limit,
-          totalPages: 0,
-          metadata: {
-            requestId: request.headers.get('x-request-id'),
-            timestamp: new Date().toISOString(),
-            userId: payload.userId
-          }
-        })
-      }
+      // Note: Users can still see clients even without campaign assignments
+      // Campaign filtering will be applied in queries if campaigns are assigned
+      console.log('📋 User campaign assignments:', {
+        userId: payload.userId,
+        campaignCount: allowedCampaignIds.length
+      })
     }
 
     let clientsData
