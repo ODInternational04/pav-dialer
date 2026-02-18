@@ -6,6 +6,8 @@ export interface User {
   last_name: string
   role: 'admin' | 'user'
   is_active: boolean
+  can_access_vault_clients: boolean
+  can_access_gold_clients: boolean
   created_at: string
   updated_at: string
   last_login?: string
@@ -13,6 +15,7 @@ export interface User {
 
 export interface Client {
   id: string
+  client_type: 'vault' | 'gold'
   box_number: string
   size: string
   contract_no: string
@@ -29,11 +32,29 @@ export interface Client {
   updated_at: string
   created_by: string
   last_updated_by: string
+  // Campaign and assignment fields
+  campaign_id?: string
+  gender?: 'male' | 'female' | 'other' | 'unknown'
+  assigned_to?: string
+  custom_fields?: Record<string, any>
   // Enhanced fields for call tracking
   total_calls?: number
   last_call_date?: string
   has_been_called?: boolean
   call_logs?: any[]
+  // Related data from API joins
+  campaigns?: {
+    id: string
+    name: string
+    department: string
+    status: string
+  }
+  assigned_user?: {
+    id: string
+    first_name: string
+    last_name: string
+    email: string
+  }
 }
 
 export interface CallLog {
@@ -121,18 +142,26 @@ export interface LoginResponse {
 }
 
 export interface CreateClientRequest {
-  box_number: string
-  size: string
-  contract_no: string
-  principal_key_holder: string
-  principal_key_holder_id_number: string
-  principal_key_holder_email_address: string
-  telephone_cell: string
+  client_type: 'vault' | 'gold'
+  // Vault client fields (all fields required for vault)
+  box_number?: string
+  size?: string
+  contract_no?: string
+  principal_key_holder_id_number?: string
+  contract_start_date?: string
+  contract_end_date?: string
+  occupation?: string
+  // Common fields for both types
+  principal_key_holder: string // Name (required for both)
+  telephone_cell: string        // Cell number (required for both)
+  principal_key_holder_email_address: string // Email (required for both)
   telephone_home?: string
-  contract_start_date: string
-  contract_end_date: string
-  occupation: string
   notes: string
+  // Additional fields
+  campaign_id?: string
+  gender?: 'male' | 'female' | 'other' | 'unknown'
+  assigned_to?: string
+  custom_fields?: Record<string, any>
 }
 
 export interface UpdateClientRequest extends Partial<CreateClientRequest> {
@@ -250,4 +279,123 @@ export interface CustomerFeedbackFilters {
   search?: string
   start_date?: string
   end_date?: string
+}
+
+// Campaign Management Types
+export interface Campaign {
+  id: string
+  name: string
+  description?: string
+  department?: string
+  status: 'active' | 'inactive' | 'completed' | 'archived'
+  criteria?: {
+    size?: string[]
+    gender?: string[]
+    [key: string]: any
+  }
+  client_fields?: Array<{
+    key: string
+    label: string
+    type: 'text' | 'number' | 'date' | 'select' | 'boolean'
+    required?: boolean
+    options?: string[]
+  }>
+  target_count: number
+  completed_count: number
+  created_by: string
+  created_at: string
+  updated_at: string
+  start_date?: string
+  end_date?: string
+  // Related data from API joins
+  created_by_user?: {
+    id: string
+    first_name: string
+    last_name: string
+    email: string
+  }
+  assigned_users?: UserCampaignAssignment[]
+  statistics?: CampaignStatistics
+}
+
+export interface UserCampaignAssignment {
+  id: string
+  user_id: string
+  campaign_id: string
+  assigned_by: string
+  assigned_at: string
+  // Related data from API joins
+  users?: {
+    id: string
+    first_name: string
+    last_name: string
+    email: string
+    role: string
+  }
+  campaigns?: {
+    id: string
+    name: string
+    department: string
+    status: string
+  }
+  assigned_by_user?: {
+    id: string
+    first_name: string
+    last_name: string
+  }
+}
+
+export interface CampaignStatistics {
+  total_clients: number
+  called_clients: number
+  uncalled_clients: number
+  total_calls: number
+  completed_calls: number
+  success_rate: number
+  assigned_users: number
+  average_calls_per_client: number
+}
+
+export interface CreateCampaignRequest {
+  name: string
+  description?: string
+  department?: string
+  status?: 'active' | 'inactive' | 'completed' | 'archived'
+  criteria?: Record<string, any>
+  client_fields?: Array<{
+    key: string
+    label: string
+    type: 'text' | 'number' | 'date' | 'select' | 'boolean'
+    required?: boolean
+    options?: string[]
+  }>
+  target_count?: number
+  start_date?: string
+  end_date?: string
+}
+
+export interface UpdateCampaignRequest extends Partial<CreateCampaignRequest> {
+  id: string
+}
+
+export interface AssignUserToCampaignRequest {
+  user_id: string
+  campaign_id: string
+}
+
+export interface BulkClientImportRequest {
+  campaign_id: string
+  clients: Partial<CreateClientRequest>[]
+}
+
+export interface CSVImportResult {
+  success: boolean
+  imported_count: number
+  failed_count: number
+  errors: Array<{
+    row: number
+    field: string
+    message: string
+  }>
+  created_clients: string[]
 }

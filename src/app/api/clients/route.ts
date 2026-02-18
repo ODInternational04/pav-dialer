@@ -35,11 +35,40 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '10'))) // Max 100 per page
     const search = sanitizeString(searchParams.get('search') || '')
     const callStatus = validateCallStatus(searchParams.get('callStatus') || 'all')
+    const clientType = validateClientType(searchParams.get('clientType') || 'all')
     const sortBy = validateSortBy(searchParams.get('sortBy') || 'created_at')
     const sortOrder = validateSortOrder(searchParams.get('sortOrder') || 'desc')
+    const campaignId = searchParams.get('campaign_id') || ''
     
     const start = (page - 1) * limit
     const end = start + limit - 1
+
+    // Check user's campaign access if not admin
+    let allowedCampaignIds: string[] = []
+    if (payload.role !== 'admin') {
+      const { data: userCampaigns } = await supabase
+        .from('user_campaign_assignments')
+        .select('campaign_id')
+        .eq('user_id', payload.userId)
+      
+      allowedCampaignIds = userCampaigns?.map(uc => uc.campaign_id) || []
+      
+      // If user has no campaigns assigned, return empty result
+      if (allowedCampaignIds.length === 0) {
+        return NextResponse.json({
+          clients: [],
+          totalCount: 0,
+          page,
+          limit,
+          totalPages: 0,
+          metadata: {
+            requestId: request.headers.get('x-request-id'),
+            timestamp: new Date().toISOString(),
+            userId: payload.userId
+          }
+        })
+      }
+    }
 
     let clientsData
     let totalCount = 0
@@ -47,15 +76,30 @@ export async function GET(request: NextRequest) {
     try {
       if (callStatus === 'called') {
         // Get clients who have been called (have call logs)
-        const { data: clientsWithCalls, error: callError, count } = await supabase
+        let query = supabase
           .from('clients')
           .select(`
             *,
             created_by_user:users!clients_created_by_fkey(first_name, last_name),
             last_updated_by_user:users!clients_last_updated_by_fkey(first_name, last_name),
+            campaigns(id, name, department, status),
             call_logs(id, call_status, created_at, call_type)
           `, { count: 'exact' })
           .not('call_logs', 'is', null)
+        
+        // Apply client type filtering
+        if (clientType !== 'all') {
+          query = query.eq('client_type', clientType)
+        }
+        
+        // Apply campaign filtering
+        if (campaignId && campaignId !== 'all') {
+          query = query.eq('campaign_id', campaignId)
+        } else if (payload.role !== 'admin' && allowedCampaignIds.length > 0) {
+          query = query.in('campaign_id', allowedCampaignIds)
+        }
+        
+        const { data: clientsWithCalls, error: callError, count } = await query
           .range(start, end)
           .order(mapSortByToColumn(sortBy), { ascending: sortOrder === 'asc' })
 
@@ -74,13 +118,28 @@ export async function GET(request: NextRequest) {
 
       } else if (callStatus === 'not_called') {
         // Get all clients first
-        const { data: allClients, error: allError } = await supabase
+        let clientQuery = supabase
           .from('clients')
           .select(`
             *,
             created_by_user:users!clients_created_by_fkey(first_name, last_name),
-            last_updated_by_user:users!clients_last_updated_by_fkey(first_name, last_name)
+            last_updated_by_user:users!clients_last_updated_by_fkey(first_name, last_name),
+            campaigns(id, name, department, status)
           `)
+        
+        // Apply client type filtering
+        if (clientType !== 'all') {
+          clientQuery = clientQuery.eq('client_type', clientType)
+        }
+        
+        // Apply campaign filtering
+        if (campaignId && campaignId !== 'all') {
+          clientQuery = clientQuery.eq('campaign_id', campaignId)
+        } else if (payload.role !== 'admin' && allowedCampaignIds.length > 0) {
+          clientQuery = clientQuery.in('campaign_id', allowedCampaignIds)
+        }
+        
+        const { data: allClients, error: allError } = await clientQuery
 
         if (allError) throw allError
 
@@ -111,14 +170,29 @@ export async function GET(request: NextRequest) {
 
       } else {
         // Get all clients with call log counts
-        const { data: allClientsData, error: allError, count } = await supabase
+        let allQuery = supabase
           .from('clients')
           .select(`
             *,
             created_by_user:users!clients_created_by_fkey(first_name, last_name),
             last_updated_by_user:users!clients_last_updated_by_fkey(first_name, last_name),
+            campaigns(id, name, department, status),
             call_logs(id, call_status, created_at, call_type)
           `, { count: 'exact' })
+        
+        // Apply client type filtering
+        if (clientType !== 'all') {
+          allQuery = allQuery.eq('client_type', clientType)
+        }
+        
+        // Apply campaign filtering
+        if (campaignId && campaignId !== 'all') {
+          allQuery = allQuery.eq('campaign_id', campaignId)
+        } else if (payload.role !== 'admin' && allowedCampaignIds.length > 0) {
+          allQuery = allQuery.in('campaign_id', allowedCampaignIds)
+        }
+        
+        const { data: allClientsData, error: allError, count } = await allQuery
           .range(start, end)
           .order(mapSortByToColumn(sortBy), { ascending: sortOrder === 'asc' })
 
@@ -231,27 +305,29 @@ export async function POST(request: NextRequest) {
     const validatedData = validation.data
 
     try {
-      // Check if box number or contract number already exists
-      const { data: existingClient, error: checkError } = await supabase
-        .from('clients')
-        .select('id, box_number, contract_no')
-        .or(`box_number.eq.${validatedData.box_number},contract_no.eq.${validatedData.contract_no}`)
-        .single()
+      // Check if box number or contract number already exists (only for vault clients)
+      if (validatedData.client_type === 'vault' && validatedData.box_number && validatedData.contract_no) {
+        const { data: existingClient, error: checkError } = await supabase
+          .from('clients')
+          .select('id, box_number, contract_no')
+          .or(`box_number.eq.${validatedData.box_number},contract_no.eq.${validatedData.contract_no}`)
+          .single()
 
-      if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows found (expected)
-        throw checkError
-      }
+        if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows found (expected)
+          throw checkError
+        }
 
-      if (existingClient) {
-        const field = existingClient.box_number === validatedData.box_number ? 'Box number' : 'Contract number'
-        return NextResponse.json(
-          { 
-            error: `${field} already exists`, 
-            code: 'DUPLICATE_ENTRY',
-            field: field.toLowerCase().replace(' ', '_')
-          },
-          { status: 409 }
-        )
+        if (existingClient) {
+          const field = existingClient.box_number === validatedData.box_number ? 'Box number' : 'Contract number'
+          return NextResponse.json(
+            { 
+              error: `${field} already exists`, 
+              code: 'DUPLICATE_ENTRY',
+              field: field.toLowerCase().replace(' ', '_')
+            },
+            { status: 409 }
+          )
+        }
       }
 
       // Create client with validated data
@@ -334,6 +410,14 @@ function sanitizeString(input: string): string {
 function validateCallStatus(status: string): string {
   const validStatuses = ['all', 'called', 'not_called']
   return validStatuses.includes(status) ? status : 'all'
+}
+
+/**
+ * Validates client type parameter
+ */
+function validateClientType(type: string): string {
+  const validTypes = ['all', 'vault', 'gold']
+  return validTypes.includes(type) ? type : 'all'
 }
 
 /**

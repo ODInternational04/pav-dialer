@@ -42,32 +42,63 @@ export const validatePhone = (phone: string): boolean => {
 }
 
 /**
- * Client validation schema
+ * Client validation schema - supports both Vault and Gold client types
  */
 export const clientValidationSchema = z.object({
+  client_type: z.enum(['vault', 'gold'], {
+    errorMap: () => ({ message: 'Client type must be either vault or gold' })
+  }),
+  
+  // Vault-specific fields (optional for Gold clients)
   box_number: z.string()
     .min(1, 'Box number is required')
     .max(50, 'Box number must be less than 50 characters')
-    .regex(/^[A-Za-z0-9\-_]+$/, 'Box number can only contain letters, numbers, hyphens, and underscores'),
+    .regex(/^[A-Za-z0-9\-_]+$/, 'Box number can only contain letters, numbers, hyphens, and underscores')
+    .optional()
+    .or(z.literal('')),
   
   size: z.string()
     .min(1, 'Size is required')
-    .max(50, 'Size must be less than 50 characters'),
+    .max(50, 'Size must be less than 50 characters')
+    .optional()
+    .or(z.literal('')),
   
   contract_no: z.string()
     .min(1, 'Contract number is required')
     .max(100, 'Contract number must be less than 100 characters')
-    .regex(/^[A-Za-z0-9\-_]+$/, 'Contract number can only contain letters, numbers, hyphens, and underscores'),
-  
-  principal_key_holder: z.string()
-    .min(1, 'Principal key holder name is required')
-    .max(255, 'Name must be less than 255 characters')
-    .regex(/^[A-Za-z\s\-'\.]+$/, 'Name can only contain letters, spaces, hyphens, apostrophes, and periods'),
+    .regex(/^[A-Za-z0-9\-_]+$/, 'Contract number can only contain letters, numbers, hyphens, and underscores')
+    .optional()
+    .or(z.literal('')),
   
   principal_key_holder_id_number: z.string()
     .min(5, 'ID number must be at least 5 characters')
     .max(50, 'ID number must be less than 50 characters')
-    .regex(/^[A-Za-z0-9]+$/, 'ID number can only contain letters and numbers'),
+    .regex(/^[A-Za-z0-9]+$/, 'ID number can only contain letters and numbers')
+    .optional()
+    .or(z.literal('')),
+  
+  contract_start_date: z.string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
+    .optional()
+    .or(z.literal('')),
+  
+  contract_end_date: z.string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
+    .optional()
+    .or(z.literal('')),
+  
+  occupation: z.string()
+    .min(1, 'Occupation is required')
+    .max(200, 'Occupation must be less than 200 characters')
+    .regex(/^[A-Za-z\s\-'\.\/]+$/, 'Occupation contains invalid characters')
+    .optional()
+    .or(z.literal('')),
+  
+  // Common fields (required for both types)
+  principal_key_holder: z.string()
+    .min(1, 'Name is required')
+    .max(255, 'Name must be less than 255 characters')
+    .regex(/^[A-Za-z\s\-'\.]+$/, 'Name can only contain letters, spaces, hyphens, apostrophes, and periods'),
   
   principal_key_holder_email_address: z.string()
     .email('Invalid email format')
@@ -81,23 +112,48 @@ export const clientValidationSchema = z.object({
     .optional()
     .or(z.literal('')),
   
-  contract_start_date: z.string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
-  
-  contract_end_date: z.string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
-  
-  occupation: z.string()
-    .min(1, 'Occupation is required')
-    .max(200, 'Occupation must be less than 200 characters')
-    .regex(/^[A-Za-z\s\-'\.\/]+$/, 'Occupation contains invalid characters'),
-  
   notes: z.string()
     .max(1000, 'Notes must be less than 1000 characters')
     .optional()
-    .or(z.literal(''))
+    .or(z.literal('')),
+  
+  campaign_id: z.string()
+    .uuid('Invalid campaign ID format')
+    .optional(),
+  gender: z.enum(['male', 'female', 'other', 'unknown'])
+    .optional(),
+  assigned_to: z.string()
+    .uuid('Invalid assigned user ID format')
+    .optional(),
+  custom_fields: z.record(z.any()).optional()
 }).refine(
-  (data) => new Date(data.contract_start_date) < new Date(data.contract_end_date),
+  (data) => {
+    // For vault clients, ensure all vault-specific fields are provided
+    if (data.client_type === 'vault') {
+      return !!(
+        data.box_number && 
+        data.size && 
+        data.contract_no && 
+        data.principal_key_holder_id_number && 
+        data.contract_start_date && 
+        data.contract_end_date &&
+        data.occupation
+      )
+    }
+    return true
+  },
+  {
+    message: "All vault client fields are required for vault client type",
+    path: ["client_type"]
+  }
+).refine(
+  (data) => {
+    // Validate date range only for vault clients
+    if (data.client_type === 'vault' && data.contract_start_date && data.contract_end_date) {
+      return new Date(data.contract_start_date) < new Date(data.contract_end_date)
+    }
+    return true
+  },
   {
     message: "Contract end date must be after start date",
     path: ["contract_end_date"]

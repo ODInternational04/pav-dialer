@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useRealTime } from '@/contexts/RealTimeContext'
 import CallLogModal from '@/components/modals/CallLogModal'
 import ClientCreateModal from '@/components/modals/ClientCreateModal'
+import ClientUploadModal from '@/components/modals/ClientUploadModal'
 import ThreeCXCallButton from '@/components/ThreeCXCallButton'
 import { Client, CallLog, CreateCallLogRequest } from '@/types'
 import { threeCXService, type CallSession } from '@/lib/3cx'
@@ -25,7 +26,8 @@ import {
   BarsArrowUpIcon,
   BarsArrowDownIcon,
   CalendarIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  ArrowUpTrayIcon
 } from '@heroicons/react/24/outline'
 
 interface ClientsResponse {
@@ -37,6 +39,7 @@ interface ClientsResponse {
 }
 
 type CallStatusFilter = 'all' | 'called' | 'not_called'
+type ClientTypeFilter = 'all' | 'vault' | 'gold'
 type SortField = 'created_at' | 'name' | 'phone' | 'contract' | 'box_number' | 'last_call'
 type SortOrder = 'asc' | 'desc'
 
@@ -52,9 +55,11 @@ export default function ClientsPage() {
   const [totalPages, setTotalPages] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const [callStatusFilter, setCallStatusFilter] = useState<CallStatusFilter>('all')
+  const [clientTypeFilter, setClientTypeFilter] = useState<ClientTypeFilter>('all')
   const [sortField, setSortField] = useState<SortField>('created_at')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showUploadModal, setShowUploadModal] = useState(false)
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [showCallModal, setShowCallModal] = useState(false)
   const [clientCallLogs, setClientCallLogs] = useState<CallLog[]>([])
@@ -63,6 +68,7 @@ export default function ClientsPage() {
   const [callEndedManually, setCallEndedManually] = useState(false)
   const [forceEnd3CXCall, setForceEnd3CXCall] = useState<Record<string, boolean>>({})
   const [showFilterPanel, setShowFilterPanel] = useState(false)
+  const [uploadPreview, setUploadPreview] = useState<{ headers: string[]; rows: string[][]; fileName: string } | null>(null)
 
   // Ref for search input to maintain focus
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -111,6 +117,7 @@ export default function ClientsPage() {
         page: currentPage.toString(),
         limit: limit.toString(),
         callStatus: callStatusFilter,
+        clientType: clientTypeFilter,
         sortBy: sortField,
         sortOrder: sortOrder,
         ...(search && { search }),
@@ -134,7 +141,7 @@ export default function ClientsPage() {
       setLoading(false)
       setSearchLoading(false)
     }
-  }, [currentPage, search, callStatusFilter, sortField, sortOrder])
+  }, [currentPage, search, callStatusFilter, clientTypeFilter, sortField, sortOrder])
 
   const fetchClientCallLogs = async (clientId: string) => {
     try {
@@ -153,6 +160,11 @@ export default function ClientsPage() {
       console.error('Error fetching call logs:', error)
     }
   }
+
+  const handleUploadParsed = useCallback((preview: { headers: string[]; rows: string[][]; fileName: string }) => {
+    setUploadPreview(preview)
+    setShowUploadModal(false)
+  }, [])
 
   // 3CX Integration Handlers
   const handle3CXCallStart = useCallback(async (callSession: CallSession) => {
@@ -495,6 +507,7 @@ export default function ClientsPage() {
     setSearchInput('')
     setSearch('')
     setCallStatusFilter('all')
+    setClientTypeFilter('all')
     setSortField('created_at')
     setSortOrder('desc')
     setCurrentPage(1)
@@ -539,6 +552,13 @@ export default function ClientsPage() {
               Filters
             </button>
             <button
+              onClick={() => setShowUploadModal(true)}
+              className="btn btn-secondary"
+            >
+              <ArrowUpTrayIcon className="w-5 h-5 mr-2" />
+              Upload Clients
+            </button>
+            <button
               onClick={() => {
                 setSelectedClient(null)
                 setShowCreateModal(true)
@@ -551,7 +571,90 @@ export default function ClientsPage() {
           </div>
         </div>
 
+        {uploadPreview && (
+          <div className="card p-4">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Latest Upload Preview</h3>
+                <p className="text-sm text-gray-600">
+                  {uploadPreview.fileName} • {uploadPreview.rows.length} rows • {uploadPreview.headers.length} columns
+                </p>
+              </div>
+              <button
+                onClick={() => setUploadPreview(null)}
+                className="btn btn-secondary"
+              >
+                Clear Preview
+              </button>
+            </div>
+            <div className="mt-4 overflow-auto max-h-96 border rounded-lg">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-50 sticky top-0">
+                  <tr>
+                    {uploadPreview.headers.map((header, index) => (
+                      <th
+                        key={`${header}-${index}`}
+                        className="px-3 py-2 text-left font-semibold text-gray-700 border-b"
+                      >
+                        {header}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {uploadPreview.rows.map((row, rowIndex) => (
+                    <tr key={`preview-row-${rowIndex}`} className={rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                      {uploadPreview.headers.map((_, cellIndex) => (
+                        <td key={`preview-cell-${rowIndex}-${cellIndex}`} className="px-3 py-2 text-gray-700 border-b">
+                          {row[cellIndex] || ''}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {/* Filter Statistics Cards */}
+        
+        {/* Client Type Tabs */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-1 mb-4">
+          <div className="flex space-x-2">
+            <button
+              onClick={() => { setClientTypeFilter('all'); setCurrentPage(1) }}
+              className={`flex-1 py-2 px-4 rounded-md font-medium transition-all ${
+                clientTypeFilter === 'all'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              All Clients
+            </button>
+            <button
+              onClick={() => { setClientTypeFilter('vault'); setCurrentPage(1) }}
+              className={`flex-1 py-2 px-4 rounded-md font-medium transition-all ${
+                clientTypeFilter === 'vault'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              🔒 Vault Clients
+            </button>
+            <button
+              onClick={() => { setClientTypeFilter('gold'); setCurrentPage(1) }}
+              className={`flex-1 py-2 px-4 rounded-md font-medium transition-all ${
+                clientTypeFilter === 'gold'
+                  ? 'bg-yellow-600 text-white shadow-sm'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              ⭐ Gold Clients
+            </button>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className={`card p-4 cursor-pointer border-2 transition-all ${
             callStatusFilter === 'all' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
@@ -948,6 +1051,15 @@ export default function ClientsPage() {
           }}
           onSave={handleSaveClient}
           client={selectedClient}
+        />
+      )}
+
+      {/* Client Upload Modal */}
+      {showUploadModal && (
+        <ClientUploadModal
+          isOpen={showUploadModal}
+          onClose={() => setShowUploadModal(false)}
+          onParsed={handleUploadParsed}
         />
       )}
       

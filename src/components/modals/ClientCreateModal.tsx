@@ -18,6 +18,7 @@ export default function ClientCreateModal({
   client 
 }: ClientCreateModalProps) {
   const [formData, setFormData] = useState<CreateClientRequest>({
+    client_type: 'vault',
     box_number: '',
     size: '',
     contract_no: '',
@@ -36,25 +37,28 @@ export default function ClientCreateModal({
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const isEditing = !!client
+  const isGoldClient = formData.client_type === 'gold'
 
   useEffect(() => {
     if (client) {
       setFormData({
-        box_number: client.box_number,
-        size: client.size,
-        contract_no: client.contract_no,
+        client_type: client.client_type || 'vault',
+        box_number: client.box_number || '',
+        size: client.size || '',
+        contract_no: client.contract_no || '',
         principal_key_holder: client.principal_key_holder,
-        principal_key_holder_id_number: client.principal_key_holder_id_number,
+        principal_key_holder_id_number: client.principal_key_holder_id_number || '',
         principal_key_holder_email_address: client.principal_key_holder_email_address,
         telephone_cell: client.telephone_cell,
         telephone_home: client.telephone_home || '',
-        contract_start_date: client.contract_start_date,
-        contract_end_date: client.contract_end_date,
-        occupation: client.occupation,
+        contract_start_date: client.contract_start_date || '',
+        contract_end_date: client.contract_end_date || '',
+        occupation: client.occupation || '',
         notes: client.notes || ''
       })
     } else {
       setFormData({
+        client_type: 'vault',
         box_number: '',
         size: '',
         contract_no: '',
@@ -75,16 +79,21 @@ export default function ClientCreateModal({
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
 
-    if (!formData.box_number.trim()) newErrors.box_number = 'Box number is required'
-    if (!formData.size.trim()) newErrors.size = 'Size is required'
-    if (!formData.contract_no.trim()) newErrors.contract_no = 'Contract number is required'
-    if (!formData.principal_key_holder.trim()) newErrors.principal_key_holder = 'Principal key holder name is required'
-    if (!formData.principal_key_holder_id_number.trim()) newErrors.principal_key_holder_id_number = 'ID number is required'
+    // Common validation for both types
+    if (!formData.principal_key_holder.trim()) newErrors.principal_key_holder = 'Name is required'
     if (!formData.principal_key_holder_email_address.trim()) newErrors.principal_key_holder_email_address = 'Email is required'
     if (!formData.telephone_cell.trim()) newErrors.telephone_cell = 'Cell phone is required'
-    if (!formData.contract_start_date) newErrors.contract_start_date = 'Contract start date is required'
-    if (!formData.contract_end_date) newErrors.contract_end_date = 'Contract end date is required'
-    if (!formData.occupation.trim()) newErrors.occupation = 'Occupation is required'
+
+    // Vault client specific validation
+    if (formData.client_type === 'vault') {
+      if (!formData.box_number?.trim()) newErrors.box_number = 'Box number is required'
+      if (!formData.size?.trim()) newErrors.size = 'Size is required'
+      if (!formData.contract_no?.trim()) newErrors.contract_no = 'Contract number is required'
+      if (!formData.principal_key_holder_id_number?.trim()) newErrors.principal_key_holder_id_number = 'ID number is required'
+      if (!formData.contract_start_date) newErrors.contract_start_date = 'Contract start date is required'
+      if (!formData.contract_end_date) newErrors.contract_end_date = 'Contract end date is required'
+      if (!formData.occupation?.trim()) newErrors.occupation = 'Occupation is required'
+    }
 
     // Validate email format
     if (formData.principal_key_holder_email_address && 
@@ -92,8 +101,8 @@ export default function ClientCreateModal({
       newErrors.principal_key_holder_email_address = 'Invalid email format'
     }
 
-    // Validate date range
-    if (formData.contract_start_date && formData.contract_end_date) {
+    // Validate date range for vault clients
+    if (formData.client_type === 'vault' && formData.contract_start_date && formData.contract_end_date) {
       const startDate = new Date(formData.contract_start_date)
       const endDate = new Date(formData.contract_end_date)
       if (endDate <= startDate) {
@@ -170,70 +179,147 @@ export default function ClientCreateModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Client Type Selector - Only show when creating new client */}
+          {!isEditing && (
+            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+              <label className="block text-sm font-medium text-blue-900 mb-2">
+                Client Type *
+              </label>
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, client_type: 'vault' }))}
+                  className={`p-4 rounded-lg border-2 transition-all ${
+                    formData.client_type === 'vault'
+                      ? 'border-blue-500 bg-blue-100 shadow-md'
+                      : 'border-gray-300 bg-white hover:border-blue-300'
+                  }`}
+                >
+                  <div className="font-semibold text-gray-900">Vault Client</div>
+                  <div className="text-xs text-gray-600 mt-1">
+                    Full details with box, contract, ID, etc.
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, client_type: 'gold' }))}
+                  className={`p-4 rounded-lg border-2 transition-all ${
+                    formData.client_type === 'gold'
+                      ? 'border-yellow-500 bg-yellow-100 shadow-md'
+                      : 'border-gray-300 bg-white hover:border-yellow-300'
+                  }`}
+                >
+                  <div className="font-semibold text-gray-900">Gold Client</div>
+                  <div className="text-xs text-gray-600 mt-1">
+                    Simplified: name, cell, email, notes only
+                  </div>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Display current client type when editing */}
+          {isEditing && (
+            <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+              <span className="text-sm font-medium text-gray-700">Client Type: </span>
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                formData.client_type === 'vault'
+                  ? 'bg-blue-100 text-blue-800'
+                  : 'bg-yellow-100 text-yellow-800'
+              }`}>
+                {formData.client_type === 'vault' ? 'Vault Client' : 'Gold Client'}
+              </span>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Box Number */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Box Number *
-              </label>
-              <input
-                type="text"
-                name="box_number"
-                value={formData.box_number}
-                onChange={handleChange}
-                className={`input ${errors.box_number ? 'border-red-500' : ''}`}
-                placeholder="e.g., BOX001"
-              />
-              {errors.box_number && (
-                <p className="text-red-500 text-sm mt-1">{errors.box_number}</p>
-              )}
-            </div>
+            {/* Vault Client Fields - Only show for vault type */}
+            {formData.client_type === 'vault' && (
+              <>
+                {/* Box Number */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Box Number *
+                  </label>
+                  <input
+                    type="text"
+                    name="box_number"
+                    value={formData.box_number || ''}
+                    onChange={handleChange}
+                    className={`input ${errors.box_number ? 'border-red-500' : ''}`}
+                    placeholder="e.g., BOX001"
+                  />
+                  {errors.box_number && (
+                    <p className="text-red-500 text-sm mt-1">{errors.box_number}</p>
+                  )}
+                </div>
 
-            {/* Size */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Size *
-              </label>
-              <select
-                name="size"
-                value={formData.size}
-                onChange={handleChange}
-                className={`input ${errors.size ? 'border-red-500' : ''}`}
-              >
-                <option value="">Select size</option>
-                <option value="A">A</option>
-                <option value="B">B</option>
-                <option value="C">C</option>
-                <option value="D">D</option>
-                <option value="E">E</option>
-              </select>
-              {errors.size && (
-                <p className="text-red-500 text-sm mt-1">{errors.size}</p>
-              )}
-            </div>
+                {/* Size */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Size *
+                  </label>
+                  <select
+                    name="size"
+                    value={formData.size || ''}
+                    onChange={handleChange}
+                    className={`input ${errors.size ? 'border-red-500' : ''}`}
+                  >
+                    <option value="">Select size</option>
+                    <option value="A">A</option>
+                    <option value="B">B</option>
+                    <option value="C">C</option>
+                    <option value="D">D</option>
+                    <option value="E">E</option>
+                  </select>
+                  {errors.size && (
+                    <p className="text-red-500 text-sm mt-1">{errors.size}</p>
+                  )}
+                </div>
 
-            {/* Contract Number */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Contract Number *
-              </label>
-              <input
-                type="text"
-                name="contract_no"
-                value={formData.contract_no}
-                onChange={handleChange}
-                className={`input ${errors.contract_no ? 'border-red-500' : ''}`}
-                placeholder="e.g., CON001"
-              />
-              {errors.contract_no && (
-                <p className="text-red-500 text-sm mt-1">{errors.contract_no}</p>
-              )}
-            </div>
+                {/* Contract Number */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Contract Number *
+                  </label>
+                  <input
+                    type="text"
+                    name="contract_no"
+                    value={formData.contract_no || ''}
+                    onChange={handleChange}
+                    className={`input ${errors.contract_no ? 'border-red-500' : ''}`}
+                    placeholder="e.g., CON001"
+                  />
+                  {errors.contract_no && (
+                    <p className="text-red-500 text-sm mt-1">{errors.contract_no}</p>
+                  )}
+                </div>
 
-            {/* Principal Key Holder */}
+                {/* ID Number */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    ID Number *
+                  </label>
+                  <input
+                    type="text"
+                    name="principal_key_holder_id_number"
+                    value={formData.principal_key_holder_id_number || ''}
+                    onChange={handleChange}
+                    className={`input ${errors.principal_key_holder_id_number ? 'border-red-500' : ''}`}
+                    placeholder="ID number"
+                  />
+                  {errors.principal_key_holder_id_number && (
+                    <p className="text-red-500 text-sm mt-1">{errors.principal_key_holder_id_number}</p>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* Common Fields - Show for both types */}
+            {/* Principal Key Holder / Name */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Principal Key Holder *
+                {isGoldClient ? 'Full Name *' : 'Principal Key Holder *'}
               </label>
               <input
                 type="text"
@@ -241,28 +327,10 @@ export default function ClientCreateModal({
                 value={formData.principal_key_holder}
                 onChange={handleChange}
                 className={`input ${errors.principal_key_holder ? 'border-red-500' : ''}`}
-                placeholder="Full name"
+                placeholder={isGoldClient ? "John Doe" : "Full name"}
               />
               {errors.principal_key_holder && (
                 <p className="text-red-500 text-sm mt-1">{errors.principal_key_holder}</p>
-              )}
-            </div>
-
-            {/* ID Number */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                ID Number *
-              </label>
-              <input
-                type="text"
-                name="principal_key_holder_id_number"
-                value={formData.principal_key_holder_id_number}
-                onChange={handleChange}
-                className={`input ${errors.principal_key_holder_id_number ? 'border-red-500' : ''}`}
-                placeholder="ID number"
-              />
-              {errors.principal_key_holder_id_number && (
-                <p className="text-red-500 text-sm mt-1">{errors.principal_key_holder_id_number}</p>
               )}
             </div>
 
@@ -302,7 +370,7 @@ export default function ClientCreateModal({
               )}
             </div>
 
-            {/* Home Phone */}
+            {/* Home Phone - Show for both types */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Home Phone
@@ -310,66 +378,71 @@ export default function ClientCreateModal({
               <input
                 type="tel"
                 name="telephone_home"
-                value={formData.telephone_home}
+                value={formData.telephone_home || ''}
                 onChange={handleChange}
                 className="input"
                 placeholder="+27987654321 (optional)"
               />
             </div>
 
-            {/* Contract Start Date */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Contract Start Date *
-              </label>
-              <input
-                type="date"
-                name="contract_start_date"
-                value={formData.contract_start_date}
-                onChange={handleChange}
-                className={`input ${errors.contract_start_date ? 'border-red-500' : ''}`}
-              />
-              {errors.contract_start_date && (
-                <p className="text-red-500 text-sm mt-1">{errors.contract_start_date}</p>
-              )}
-            </div>
+            {/* Vault Client Fields - Dates and Occupation */}
+            {formData.client_type === 'vault' && (
+              <>
+                {/* Contract Start Date */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Contract Start Date *
+                  </label>
+                  <input
+                    type="date"
+                    name="contract_start_date"
+                    value={formData.contract_start_date || ''}
+                    onChange={handleChange}
+                    className={`input ${errors.contract_start_date ? 'border-red-500' : ''}`}
+                  />
+                  {errors.contract_start_date && (
+                    <p className="text-red-500 text-sm mt-1">{errors.contract_start_date}</p>
+                  )}
+                </div>
 
-            {/* Contract End Date */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Contract End Date *
-              </label>
-              <input
-                type="date"
-                name="contract_end_date"
-                value={formData.contract_end_date}
-                onChange={handleChange}
-                className={`input ${errors.contract_end_date ? 'border-red-500' : ''}`}
-              />
-              {errors.contract_end_date && (
-                <p className="text-red-500 text-sm mt-1">{errors.contract_end_date}</p>
-              )}
-            </div>
+                {/* Contract End Date */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Contract End Date *
+                  </label>
+                  <input
+                    type="date"
+                    name="contract_end_date"
+                    value={formData.contract_end_date || ''}
+                    onChange={handleChange}
+                    className={`input ${errors.contract_end_date ? 'border-red-500' : ''}`}
+                  />
+                  {errors.contract_end_date && (
+                    <p className="text-red-500 text-sm mt-1">{errors.contract_end_date}</p>
+                  )}
+                </div>
 
-            {/* Occupation */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Occupation *
-              </label>
-              <input
-                type="text"
-                name="occupation"
-                value={formData.occupation}
-                onChange={handleChange}
-                className={`input ${errors.occupation ? 'border-red-500' : ''}`}
-                placeholder="Job title or profession"
-              />
-              {errors.occupation && (
-                <p className="text-red-500 text-sm mt-1">{errors.occupation}</p>
-              )}
-            </div>
+                {/* Occupation */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Occupation *
+                  </label>
+                  <input
+                    type="text"
+                    name="occupation"
+                    value={formData.occupation || ''}
+                    onChange={handleChange}
+                    className={`input ${errors.occupation ? 'border-red-500' : ''}`}
+                    placeholder="Job title or profession"
+                  />
+                  {errors.occupation && (
+                    <p className="text-red-500 text-sm mt-1">{errors.occupation}</p>
+                  )}
+                </div>
+              </>
+            )}
 
-            {/* Notes */}
+            {/* Notes - Show for both types */}
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Notes
