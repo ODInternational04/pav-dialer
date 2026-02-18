@@ -108,7 +108,7 @@ INSERT INTO clients (
     last_updated_by
 )
 SELECT 
-    'gold',
+    'gold'::client_type,
     'John Gold Customer',
     'john.gold@example.com',
     '+27123456001',
@@ -131,7 +131,7 @@ AND NOT EXISTS (SELECT 1 FROM clients WHERE client_type = 'gold' LIMIT 1)
 UNION ALL
 
 SELECT 
-    'gold',
+    'gold'::client_type,
     'Sarah Gold VIP',
     'sarah.vip@example.com',
     '+27123456002',
@@ -154,7 +154,7 @@ AND NOT EXISTS (SELECT 1 FROM clients WHERE client_type = 'gold' LIMIT 1)
 UNION ALL
 
 SELECT 
-    'gold',
+    'gold'::client_type,
     'Michael Gold Elite',
     'michael.elite@example.com',
     '+27123456003',

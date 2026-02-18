@@ -30,7 +30,7 @@ INSERT INTO clients (
     last_updated_by
 ) 
 SELECT 
-    'gold',
+    'gold'::client_type,
     'John Gold Customer',
     'john.gold@example.com',
     '+27123456789',
@@ -51,7 +51,7 @@ FROM users u WHERE u.email = 'goldsales1@ibvglobal.com'
 UNION ALL
 
 SELECT 
-    'gold',
+    'gold'::client_type,
     'Sarah VIP Member',
     'sarah.vip@example.com',
     '+27987654321',
@@ -72,7 +72,7 @@ FROM users u WHERE u.email = 'goldsales1@ibvglobal.com'
 UNION ALL
 
 SELECT 
-    'gold',
+    'gold'::client_type,
     'Michael Elite',
     'michael.elite@example.com',
     '+27555123456',
