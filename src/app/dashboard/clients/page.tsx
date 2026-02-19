@@ -8,6 +8,7 @@ import CallLogModal from '@/components/modals/CallLogModal'
 import ClientCreateModal from '@/components/modals/ClientCreateModal'
 import ClientUploadModal from '@/components/modals/ClientUploadModal'
 import ThreeCXCallButton from '@/components/ThreeCXCallButton'
+import QuickCallButton from '@/components/QuickCallButton'
 import { Client, CallLog, CreateCallLogRequest } from '@/types'
 import { threeCXService, type CallSession } from '@/lib/3cx'
 import { 
@@ -579,6 +580,7 @@ export default function ClientsPage() {
               <ArrowUpTrayIcon className="w-5 h-5 mr-2" />
               Upload Clients
             </button>
+            <QuickCallButton onCallComplete={fetchClients} />
             <button
               onClick={() => {
                 setSelectedClient(null)

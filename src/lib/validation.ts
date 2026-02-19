@@ -103,10 +103,10 @@ export const clientValidationSchema = z.object({
     .max(255, 'Email must be less than 255 characters'),
   
   telephone_cell: z.string()
-    .regex(/^[\+]?[1-9][\d\s\-\(\)]{7,20}$/, 'Invalid phone number format'),
+    .regex(/^[\+]?[\d][\d\s\-\(\)]{7,20}$/, 'Invalid phone number format'),
   
   telephone_home: z.string()
-    .regex(/^[\+]?[1-9][\d\s\-\(\)]{7,20}$/, 'Invalid phone number format')
+    .regex(/^[\+]?[\d][\d\s\-\(\)]{7,20}$/, 'Invalid phone number format')
     .optional()
     .or(z.literal('')),
   

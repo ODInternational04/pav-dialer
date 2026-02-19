@@ -2,6 +2,7 @@
 
 import { useAuth } from '@/contexts/AuthContext'
 import DashboardLayout from '@/components/layout/DashboardLayout'
+import QuickCallButton from '@/components/QuickCallButton'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -435,6 +436,9 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Floating Quick Call Button */}
+      <QuickCallButton variant="floating" onCallComplete={fetchDashboardData} />
     </DashboardLayout>
   )
 }
