@@ -416,7 +416,11 @@ function CreateClientStep({
     contract_start_date: new Date().toISOString().split('T')[0],
     contract_end_date: '',
     occupation: '',
-    notes: 'Created during incoming call'
+    notes: 'Created during incoming call',
+    gender: 'unknown' as 'male' | 'female' | 'other' | 'unknown',
+    campaign_id: undefined as string | undefined,
+    assigned_to: undefined as string | undefined,
+    custom_fields: undefined as Record<string, any> | undefined
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
