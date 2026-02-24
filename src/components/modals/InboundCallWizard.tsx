@@ -431,14 +431,9 @@ function CreateClientStep({
     // Common required fields for both types
     if (!formData.principal_key_holder.trim()) newErrors.principal_key_holder = 'Name is required'
     if (!formData.telephone_cell.trim()) newErrors.telephone_cell = 'Phone is required'
-    if (!formData.principal_key_holder_email_address.trim()) newErrors.principal_key_holder_email_address = 'Email is required'
-
-    // Vault-specific required fields
-    if (formData.client_type === 'vault') {
-      if (!formData.box_number.trim()) newErrors.box_number = 'Box number is required'
-      if (!formData.contract_no.trim()) newErrors.contract_no = 'Contract number is required'
-      if (!formData.principal_key_holder_id_number.trim()) newErrors.principal_key_holder_id_number = 'ID number is required'
-    }
+    
+    // Email is not required for gold clients, only for vault
+    // For vault clients, only name and phone are required (no other fields)
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
@@ -507,9 +502,9 @@ function CreateClientStep({
           {errors.principal_key_holder && <p className="text-sm text-red-600 mt-2 font-medium">⚠️ {errors.principal_key_holder}</p>}
         </div>
 
-        {/* Email - Required for both */}
+        {/* Email - Optional */}
         <div className="col-span-2">
-          <label className="block text-sm font-semibold text-gray-700 mb-2">Email *</label>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
           <input
             type="email"
             value={formData.principal_key_holder_email_address}
@@ -546,7 +541,7 @@ function CreateClientStep({
         {formData.client_type === 'vault' && (
           <>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Box Number *</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Box Number</label>
               <input
                 type="text"
                 value={formData.box_number}
@@ -568,7 +563,7 @@ function CreateClientStep({
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Contract Number *</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Contract Number</label>
               <input
                 type="text"
                 value={formData.contract_no}
@@ -579,7 +574,7 @@ function CreateClientStep({
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">ID Number *</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">ID Number</label>
               <input
                 type="text"
                 value={formData.principal_key_holder_id_number}
