@@ -28,7 +28,6 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<Omit<User, 'password'> | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [isInitialized, setIsInitialized] = useState(false)
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
@@ -102,7 +101,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Ensure we're on the client side
       if (typeof window === 'undefined') {
         setIsLoading(false)
-        setIsInitialized(true)
         return
       }
 
@@ -121,7 +119,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         logout()
       } finally {
         setIsLoading(false)
-        setIsInitialized(true)
       }
     }
 
@@ -136,11 +133,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     logout,
     isLoading,
     isAdmin,
-  }
-
-  // Don't render children until auth is initialized to prevent race conditions
-  if (!isInitialized) {
-    return null
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

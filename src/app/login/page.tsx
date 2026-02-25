@@ -9,8 +9,15 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const { login } = useAuth()
+  const { login, isLoading: authLoading, user } = useAuth()
   const router = useRouter()
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!authLoading && user) {
+      router.replace('/dashboard')
+    }
+  }, [user, authLoading, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -18,8 +25,12 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      // Small delay to ensure AuthContext is ready
-      await new Promise(resolve => setTimeout(resolve, 100))
+      // Wait for auth to be ready
+      if (authLoading) {
+        setError('Authentication system is initializing. Please wait...')
+        setIsLoading(false)
+        return
+      }
       
       const success = await login(email, password)
       if (success) {
@@ -88,10 +99,10 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || authLoading}
               className="w-full btn btn-primary py-3 text-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? 'Signing in...' : 'Sign In'}
+              {authLoading ? 'Initializing...' : isLoading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
 
