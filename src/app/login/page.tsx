@@ -18,14 +18,19 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
+      // Small delay to ensure AuthContext is ready
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
       const success = await login(email, password)
       if (success) {
-        router.push('/dashboard')
+        // Use replace to prevent back button issues
+        router.replace('/dashboard')
       } else {
         setError('Invalid email or password')
       }
     } catch (error) {
-      setError('An error occurred during login')
+      console.error('Login error:', error)
+      setError('An error occurred during login. Please try again.')
     } finally {
       setIsLoading(false)
     }

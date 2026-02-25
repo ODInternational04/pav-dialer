@@ -28,22 +28,37 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<Omit<User, 'password'> | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isInitialized, setIsInitialized] = useState(false)
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
+      // Clear any existing auth state before attempting login
+      setUser(null)
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+      }
+
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ email, password }),
+        cache: 'no-store', // Prevent caching issues
       })
 
       if (response.ok) {
         const data = await response.json()
+        
+        // Ensure localStorage is available (client-side only)
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('token', data.token)
+          localStorage.setItem('user', JSON.stringify(data.user))
+        }
+        
+        // Set user state after successful storage
         setUser(data.user)
-        localStorage.setItem('token', data.token)
-        localStorage.setItem('user', JSON.stringify(data.user))
         return true
       }
       return false
@@ -55,8 +70,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = () => {
     setUser(null)
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+    }
   }
 
   const verifyToken = async (token: string) => {
@@ -65,6 +82,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         headers: {
           Authorization: `Bearer ${token}`,
         },
+        cache: 'no-store', // Prevent caching issues
       })
 
       if (response.ok) {
@@ -73,23 +91,38 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return true
       }
       return false
-    } catch {
+    } catch (error) {
+      console.error('Token verification error:', error)
       return false
     }
   }
 
   useEffect(() => {
     const initAuth = async () => {
-      const token = localStorage.getItem('token')
-      const userData = localStorage.getItem('user')
-
-      if (token && userData) {
-        const isValid = await verifyToken(token)
-        if (!isValid) {
-          logout()
-        }
+      // Ensure we're on the client side
+      if (typeof window === 'undefined') {
+        setIsLoading(false)
+        setIsInitialized(true)
+        return
       }
-      setIsLoading(false)
+
+      try {
+        const token = localStorage.getItem('token')
+        const userData = localStorage.getItem('user')
+
+        if (token && userData) {
+          const isValid = await verifyToken(token)
+          if (!isValid) {
+            logout()
+          }
+        }
+      } catch (error) {
+        console.error('Auth initialization error:', error)
+        logout()
+      } finally {
+        setIsLoading(false)
+        setIsInitialized(true)
+      }
     }
 
     initAuth()
@@ -103,6 +136,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     logout,
     isLoading,
     isAdmin,
+  }
+
+  // Don't render children until auth is initialized to prevent race conditions
+  if (!isInitialized) {
+    return null
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
