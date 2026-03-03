@@ -96,17 +96,18 @@ export const clientValidationSchema = z.object({
   principal_key_holder: z.string()
     .min(1, 'Name is required')
     .max(255, 'Name must be less than 255 characters')
-    .regex(/^[A-Za-z\s\-'\.]+$/, 'Name can only contain letters, spaces, hyphens, apostrophes, and periods'),
+    .regex(/^[A-Za-z0-9\s\-'\.]+$/, 'Name can only contain letters, numbers, spaces, hyphens, apostrophes, and periods'),
   
   principal_key_holder_email_address: z.string()
-    .email('Invalid email format')
-    .max(255, 'Email must be less than 255 characters'),
+    .max(255, 'Email must be less than 255 characters')
+    .optional()
+    .or(z.literal('')),
   
   telephone_cell: z.string()
-    .regex(/^[\+]?[\d][\d\s\-\(\)]{7,20}$/, 'Invalid phone number format'),
+    .regex(/^[\+]?[\d\s\-\(\)]{7,20}$/, 'Invalid phone number format'),
   
   telephone_home: z.string()
-    .regex(/^[\+]?[\d][\d\s\-\(\)]{7,20}$/, 'Invalid phone number format')
+    .regex(/^[\+]?[\d\s\-\(\)]{7,20}$/, 'Invalid phone number format')
     .optional()
     .or(z.literal('')),
   
@@ -155,6 +156,31 @@ export const clientValidationSchema = z.object({
   {
     message: "Contract end date must be after start date",
     path: ["contract_end_date"]
+  }
+).refine(
+  (data) => {
+    // For vault clients, email is required
+    if (data.client_type === 'vault') {
+      return !!(data.principal_key_holder_email_address && data.principal_key_holder_email_address.trim())
+    }
+    return true
+  },
+  {
+    message: "Email is required for vault clients",
+    path: ["principal_key_holder_email_address"]
+  }
+).refine(
+  (data) => {
+    // If email is provided, validate its format
+    if (data.principal_key_holder_email_address && data.principal_key_holder_email_address.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      return emailRegex.test(data.principal_key_holder_email_address)
+    }
+    return true
+  },
+  {
+    message: "Invalid email format",
+    path: ["principal_key_holder_email_address"]
   }
 )
 
