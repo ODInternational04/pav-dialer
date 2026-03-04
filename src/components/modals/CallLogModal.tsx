@@ -792,7 +792,8 @@ export default function CallLogModal({
                           checked={feedbackData.feedback_type === option.value}
                           onChange={(e) => setFeedbackData(prev => ({ 
                             ...prev, 
-                            feedback_type: e.target.value as any 
+                            feedback_type: e.target.value as any,
+                            feedback_subject: ''
                           }))}
                           className="sr-only"
                         />
@@ -826,16 +827,31 @@ export default function CallLogModal({
                   <label className="label">
                     Subject <span className="text-danger-500">*</span>
                   </label>
-                  <input
-                    type="text"
-                    value={feedbackData.feedback_subject}
-                    onChange={(e) => setFeedbackData(prev => ({ 
-                      ...prev, 
-                      feedback_subject: e.target.value 
-                    }))}
-                    className={`input ${errors.feedback_subject ? 'border-danger-500' : ''}`}
-                    placeholder="Brief description of the feedback..."
-                  />
+                  {feedbackData.feedback_type === 'general' ? (
+                    <select
+                      value={feedbackData.feedback_subject}
+                      onChange={(e) => setFeedbackData(prev => ({ 
+                        ...prev, 
+                        feedback_subject: e.target.value 
+                      }))}
+                      className={`input ${errors.feedback_subject ? 'border-danger-500' : ''}`}
+                    >
+                      <option value="">Select a subject...</option>
+                      <option value="Not interested">Not interested</option>
+                      <option value="Possible Sale">Possible Sale</option>
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={feedbackData.feedback_subject}
+                      onChange={(e) => setFeedbackData(prev => ({ 
+                        ...prev, 
+                        feedback_subject: e.target.value 
+                      }))}
+                      className={`input ${errors.feedback_subject ? 'border-danger-500' : ''}`}
+                      placeholder="Brief description of the feedback..."
+                    />
+                  )}
                   {errors.feedback_subject && (
                     <p className="text-sm text-danger-600 mt-1">{errors.feedback_subject}</p>
                   )}

@@ -11,7 +11,12 @@ import {
   CheckCircleIcon,
   ClockIcon,
   ArrowRightIcon,
-  ArrowLeftIcon
+  ArrowLeftIcon,
+  ChatBubbleLeftRightIcon,
+  FaceSmileIcon,
+  FaceFrownIcon,
+  LightBulbIcon,
+  InformationCircleIcon
 } from '@heroicons/react/24/outline'
 
 interface InboundCallWizardProps {
@@ -159,7 +164,7 @@ export default function InboundCallWizard({
     }
   }
 
-  const handleCompleteCall = async (callData: Partial<CreateCallLogRequest>) => {
+  const handleCompleteCall = async (callData: any) => {
     if (!selectedClient) return
 
     const callLog: CreateCallLogRequest = {
@@ -173,6 +178,34 @@ export default function InboundCallWizard({
     }
 
     await onComplete(callLog, selectedClient)
+
+    // Save customer feedback if enabled
+    if (callData.feedback_enabled && callData.feedback_subject && callData.feedback_notes) {
+      try {
+        const token = localStorage.getItem('token')
+        const feedbackResponse = await fetch('/api/customer-feedback', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            client_id: selectedClient.id,
+            feedback_type: callData.feedback_type,
+            subject: callData.feedback_subject,
+            notes: callData.feedback_notes,
+            priority: callData.feedback_priority
+          })
+        })
+
+        if (!feedbackResponse.ok) {
+          console.error('Failed to save customer feedback')
+        }
+      } catch (error) {
+        console.error('Error saving customer feedback:', error)
+      }
+    }
+
     handleClose()
   }
 
@@ -647,7 +680,13 @@ function CompleteCallStep({
     call_status: 'completed' as any,
     notes: '',
     callback_requested: false,
-    callback_time: ''
+    callback_time: '',
+    // Customer feedback fields
+    feedback_enabled: false,
+    feedback_type: 'general' as 'complaint' | 'happy' | 'suggestion' | 'general',
+    feedback_subject: '',
+    feedback_notes: '',
+    feedback_priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent'
   })
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -756,6 +795,132 @@ function CompleteCallStep({
               className="w-full px-4 py-3 border-2 border-amber-300 rounded-lg focus:border-amber-500 focus:ring-4 focus:ring-amber-100 transition-all duration-200"
               min={new Date().toISOString().slice(0, 16)}
             />
+          </div>
+        )}
+      </div>
+
+      {/* Customer Feedback */}
+      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl p-5 shadow-sm">
+        <div className="flex items-center mb-4">
+          <input
+            type="checkbox"
+            id="feedback"
+            checked={formData.feedback_enabled}
+            onChange={(e) => setFormData({ ...formData, feedback_enabled: e.target.checked })}
+            className="w-5 h-5 rounded border-blue-300 text-blue-600 focus:ring-blue-500 transition-all"
+          />
+          <label htmlFor="feedback" className="ml-3 font-bold text-gray-900 text-lg">
+            💬 Add Customer Feedback
+          </label>
+        </div>
+
+        {formData.feedback_enabled && (
+          <div className="ml-8 space-y-4">
+            {/* Feedback Type */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Feedback Type</label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, feedback_type: 'complaint', feedback_subject: '' })}
+                  className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all ${
+                    formData.feedback_type === 'complaint'
+                      ? 'border-red-500 bg-red-50 text-red-700 font-semibold'
+                      : 'border-gray-300 hover:border-red-300 hover:bg-red-50/50'
+                  }`}
+                >
+                  <FaceFrownIcon className="w-5 h-5" />
+                  Complaint
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, feedback_type: 'happy', feedback_subject: '' })}
+                  className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all ${
+                    formData.feedback_type === 'happy'
+                      ? 'border-green-500 bg-green-50 text-green-700 font-semibold'
+                      : 'border-gray-300 hover:border-green-300 hover:bg-green-50/50'
+                  }`}
+                >
+                  <FaceSmileIcon className="w-5 h-5" />
+                  Happy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, feedback_type: 'suggestion', feedback_subject: '' })}
+                  className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all ${
+                    formData.feedback_type === 'suggestion'
+                      ? 'border-purple-500 bg-purple-50 text-purple-700 font-semibold'
+                      : 'border-gray-300 hover:border-purple-300 hover:bg-purple-50/50'
+                  }`}
+                >
+                  <LightBulbIcon className="w-5 h-5" />
+                  Suggestion
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, feedback_type: 'general', feedback_subject: '' })}
+                  className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all ${
+                    formData.feedback_type === 'general'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-semibold'
+                      : 'border-gray-300 hover:border-blue-300 hover:bg-blue-50/50'
+                  }`}
+                >
+                  <InformationCircleIcon className="w-5 h-5" />
+                  General
+                </button>
+              </div>
+            </div>
+
+            {/* Feedback Priority */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Priority</label>
+              <select
+                value={formData.feedback_priority}
+                onChange={(e) => setFormData({ ...formData, feedback_priority: e.target.value as any })}
+                className="w-full px-4 py-3 border-2 border-blue-300 rounded-lg focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-200"
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </div>
+
+            {/* Feedback Subject */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Subject</label>
+              {formData.feedback_type === 'general' ? (
+                <select
+                  value={formData.feedback_subject}
+                  onChange={(e) => setFormData({ ...formData, feedback_subject: e.target.value })}
+                  className="w-full px-4 py-3 border-2 border-blue-300 rounded-lg focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-200"
+                >
+                  <option value="">Select a subject...</option>
+                  <option value="Not interested">Not interested</option>
+                  <option value="Possible Sale">Possible Sale</option>
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={formData.feedback_subject}
+                  onChange={(e) => setFormData({ ...formData, feedback_subject: e.target.value })}
+                  className="w-full px-4 py-3 border-2 border-blue-300 rounded-lg focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-200"
+                  placeholder="Brief subject for the feedback..."
+                  maxLength={255}
+                />
+              )}
+            </div>
+
+            {/* Feedback Notes */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Feedback Details</label>
+              <textarea
+                value={formData.feedback_notes}
+                onChange={(e) => setFormData({ ...formData, feedback_notes: e.target.value })}
+                className="w-full px-4 py-3 border-2 border-blue-300 rounded-lg focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-200 h-24 resize-none"
+                placeholder="Enter detailed feedback from the customer..."
+              />
+            </div>
           </div>
         )}
       </div>
