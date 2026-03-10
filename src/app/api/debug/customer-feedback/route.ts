@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     // Check if client exists
     const { data: client, error: clientError } = await supabase
       .from('clients')
-      .select('id, principal_key_holder')
+      .select('id, name')
       .eq('id', body.client_id)
       .single()
 
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
       }, { status: 404 })
     }
 
-    console.log('✅ Client found:', client.principal_key_holder)
+    console.log('✅ Client found:', client.name)
 
     // Try to insert feedback
     const insertData = {
@@ -119,9 +119,9 @@ export async function POST(request: NextRequest) {
         const feedbackWithRelations = {
           ...feedback,
           clients: {
-            principal_key_holder: client.principal_key_holder,
-            box_number: 'Debug',
-            telephone_cell: 'N/A'
+            name: client.name,
+            phone: '',
+            email: ''
           }
         }
         

@@ -93,9 +93,9 @@ Feedback Details:
 • Subject: ${feedback.subject}
 
 Client Information:
-• Name: ${feedback.clients?.principal_key_holder || 'Unknown'}
-• Box Number: ${feedback.clients?.box_number || 'N/A'}
-• Phone: ${feedback.clients?.telephone_cell || 'N/A'}
+• Name: ${feedback.clients?.name || 'Unknown'}
+• Phone: ${feedback.clients?.phone || 'N/A'}
+• Email: ${feedback.clients?.email || 'N/A'}
 
 Submitted by: ${submittedByUser.first_name} ${submittedByUser.last_name} (${submittedByUser.email})
 Date: ${new Date(feedback.created_at).toLocaleString()}
@@ -131,15 +131,15 @@ This is an automated notification from the IBV Dialer.
       </tr>
       <tr>
         <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; font-weight: bold; color: #374151;">Client:</td>
-        <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; color: #6b7280;">${feedback.clients?.principal_key_holder || 'Unknown'}</td>
-      </tr>
-      <tr>
-        <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; font-weight: bold; color: #374151;">Box Number:</td>
-        <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; color: #6b7280;">${feedback.clients?.box_number || 'N/A'}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; color: #6b7280;">${feedback.clients?.name || 'Unknown'}</td>
       </tr>
       <tr>
         <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; font-weight: bold; color: #374151;">Phone:</td>
-        <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; color: #6b7280;">${feedback.clients?.telephone_cell || 'N/A'}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; color: #6b7280;">${feedback.clients?.phone || 'N/A'}</td>
+      </tr>
+      <tr>
+        <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; font-weight: bold; color: #374151;">Email:</td>
+        <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; color: #6b7280;">${feedback.clients?.email || 'N/A'}</td>
       </tr>
       <tr>
         <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; font-weight: bold; color: #374151;">Submitted by:</td>

@@ -80,18 +80,15 @@ export default function DashboardLayout({ children }: SidebarProps) {
     { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
     { name: 'Users', href: '/dashboard/users', icon: UsersIcon },
     { name: 'User Status', href: '/dashboard/user-status', icon: UsersIcon },
-    { name: 'Campaigns', href: '/dashboard/campaigns', icon: RectangleStackIcon },
     { name: 'Clients', href: '/dashboard/clients', icon: ClipboardDocumentListIcon },
     { name: 'Callbacks', href: '/dashboard/callbacks', icon: ExclamationTriangleIcon, badge: callbackCount },
     { name: 'Call Logs', href: '/dashboard/calls', icon: PhoneIcon },
     { name: 'Customer Feedback', href: '/dashboard/customer-feedback', icon: ChatBubbleLeftIcon },
     { name: 'Reports', href: '/dashboard/reports', icon: ChartBarIcon },
-    { name: '3CX Settings', href: '/dashboard/threecx-settings', icon: CogIcon },
   ]
 
   const userNavItems = [
     { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
-    { name: 'Campaigns', href: '/dashboard/campaigns', icon: RectangleStackIcon },
     { name: 'Clients', href: '/dashboard/clients', icon: ClipboardDocumentListIcon },
     { name: 'Callbacks', href: '/dashboard/callbacks', icon: ExclamationTriangleIcon, badge: callbackCount },
     { name: 'My Calls', href: '/dashboard/calls', icon: PhoneIcon },
@@ -106,7 +103,7 @@ export default function DashboardLayout({ children }: SidebarProps) {
         {/* Logo */}
         <div className="flex items-center justify-center h-16 px-4 bg-primary-600 flex-shrink-0">
           <h1 className="text-xl font-bold text-white">
-            IBV Dialer
+            Pavilion Hotel
           </h1>
         </div>
 

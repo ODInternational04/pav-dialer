@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     // Verify client exists
     const { data: client, error: clientError } = await supabase
       .from('clients')
-      .select('id, box_number, principal_key_holder, telephone_cell, contract_no')
+      .select('id, name, phone, email')
       .eq('id', clientId)
       .single()
 

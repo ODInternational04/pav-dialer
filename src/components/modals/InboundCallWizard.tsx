@@ -381,9 +381,9 @@ function CaptureStep({
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-bold text-gray-900 group-hover:text-emerald-900">{client.principal_key_holder}</p>
-                    <p className="text-sm text-gray-600 mt-1">📦 Box: {client.box_number} | 📱 {client.telephone_cell}</p>
-                    <p className="text-xs text-gray-500 mt-1">📄 Contract: {client.contract_no}</p>
+                    <p className="font-bold text-gray-900 group-hover:text-emerald-900">{client.name}</p>
+                    <p className="text-sm text-gray-600 mt-1">📱 Phone: {client.phone}</p>
+                    {client.email && <p className="text-xs text-gray-500 mt-1">📧 Email: {client.email}</p>}
                   </div>
                   <ArrowRightIcon className="w-6 h-6 text-emerald-600 group-hover:translate-x-1 transition-transform" />
                 </div>
@@ -437,23 +437,10 @@ function CreateClientStep({
   isLoading: boolean
 }) {
   const [formData, setFormData] = useState({
-    client_type: 'vault' as 'vault' | 'gold',
-    box_number: '',
-    size: '',
-    contract_no: '',
-    principal_key_holder: quickData.name,
-    principal_key_holder_id_number: '',
-    principal_key_holder_email_address: quickData.email || '',
-    telephone_cell: quickData.phone,
-    telephone_home: '',
-    contract_start_date: new Date().toISOString().split('T')[0],
-    contract_end_date: '',
-    occupation: '',
-    notes: 'Created during incoming call',
-    gender: 'unknown' as 'male' | 'female' | 'other' | 'unknown',
-    campaign_id: undefined as string | undefined,
-    assigned_to: undefined as string | undefined,
-    custom_fields: undefined as Record<string, any> | undefined
+    name: quickData.name,
+    phone: quickData.phone,
+    email: quickData.email || '',
+    notes: 'Created during incoming call'
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -461,12 +448,9 @@ function CreateClientStep({
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
 
-    // Common required fields for both types
-    if (!formData.principal_key_holder.trim()) newErrors.principal_key_holder = 'Name is required'
-    if (!formData.telephone_cell.trim()) newErrors.telephone_cell = 'Phone is required'
-    
-    // Email is not required for gold clients, only for vault
-    // For vault clients, only name and phone are required (no other fields)
+    // Required fields
+    if (!formData.name.trim()) newErrors.name = 'Name is required'
+    if (!formData.phone.trim()) newErrors.phone = 'Phone is required'
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
@@ -475,23 +459,7 @@ function CreateClientStep({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (validateForm()) {
-      // For Gold clients, only send required fields and let API set defaults
-      const clientData = formData.client_type === 'gold' 
-        ? {
-            client_type: formData.client_type,
-            principal_key_holder: formData.principal_key_holder,
-            principal_key_holder_email_address: formData.principal_key_holder_email_address,
-            telephone_cell: formData.telephone_cell,
-            telephone_home: formData.telephone_home,
-            notes: formData.notes,
-            gender: formData.gender,
-            campaign_id: formData.campaign_id,
-            assigned_to: formData.assigned_to,
-            custom_fields: formData.custom_fields
-          }
-        : formData
-      
-      onSave(clientData)
+      onSave(formData)
     }
   }
 
@@ -507,138 +475,55 @@ function CreateClientStep({
         <p className="text-sm text-blue-700 ml-12">Fill in the essential details. You can update more information later.</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="col-span-2">
-          <label className="block text-sm font-semibold text-gray-700 mb-2">Client Type</label>
-          <select
-            value={formData.client_type}
-            onChange={(e) => setFormData({ ...formData, client_type: e.target.value as any })}
-            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-200 text-lg font-medium"
-          >
-            <option value="vault">🔒 Vault</option>
-            <option value="gold">⭐ Gold</option>
-          </select>
-          <p className="text-xs text-gray-500 mt-2 flex items-center">
-            {formData.client_type === 'gold' ? '⭐ Gold clients require minimal information' : '🔒 Vault clients require full details'}
-          </p>
-        </div>
-
-        {/* Full Name - Required for both */}
-        <div className="col-span-2">
+      <div className="space-y-4">
+        {/* Full Name - Required */}
+        <div>
           <label className="block text-sm font-semibold text-gray-700 mb-2">Full Name *</label>
           <input
             type="text"
-            value={formData.principal_key_holder}
-            onChange={(e) => setFormData({ ...formData, principal_key_holder: e.target.value })}
-            className={`w-full px-4 py-3 border-2 rounded-lg transition-all duration-200 focus:ring-4 ${errors.principal_key_holder ? 'border-red-500 focus:ring-red-100' : 'border-gray-200 focus:border-blue-500 focus:ring-blue-100'}`}
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            className={`w-full px-4 py-3 border-2 rounded-lg transition-all duration-200 focus:ring-4 ${errors.name ? 'border-red-500 focus:ring-red-100' : 'border-gray-200 focus:border-blue-500 focus:ring-blue-100'}`}
+            placeholder="Enter client's full name"
           />
-          {errors.principal_key_holder && <p className="text-sm text-red-600 mt-2 font-medium">⚠️ {errors.principal_key_holder}</p>}
+          {errors.name && <p className="text-sm text-red-600 mt-2 font-medium">⚠️ {errors.name}</p>}
+        </div>
+
+        {/* Phone - Required */}
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Phone *</label>
+          <input
+            type="tel"
+            value={formData.phone}
+            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+            className={`w-full px-4 py-3 border-2 rounded-lg transition-all duration-200 focus:ring-4 ${errors.phone ? 'border-red-500 focus:ring-red-100' : 'border-gray-200 focus:border-blue-500 focus:ring-blue-100'}`}
+            placeholder="Enter phone number"
+          />
+          {errors.phone && <p className="text-sm text-red-600 mt-2 font-medium">⚠️ {errors.phone}</p>}
         </div>
 
         {/* Email - Optional */}
-        <div className="col-span-2">
-          <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Email (Optional)</label>
           <input
             type="email"
-            value={formData.principal_key_holder_email_address}
-            onChange={(e) => setFormData({ ...formData, principal_key_holder_email_address: e.target.value })}
-            className={`w-full px-4 py-3 border-2 rounded-lg transition-all duration-200 focus:ring-4 ${errors.principal_key_holder_email_address ? 'border-red-500 focus:ring-red-100' : 'border-gray-200 focus:border-blue-500 focus:ring-blue-100'}`}
-          />
-          {errors.principal_key_holder_email_address && <p className="text-sm text-red-600 mt-2 font-medium">⚠️ {errors.principal_key_holder_email_address}</p>}
-        </div>
-
-        {/* Cell Phone - Required for both */}
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">Cell Phone *</label>
-          <input
-            type="tel"
-            value={formData.telephone_cell}
-            onChange={(e) => setFormData({ ...formData, telephone_cell: e.target.value })}
-            className={`w-full px-4 py-3 border-2 rounded-lg transition-all duration-200 focus:ring-4 ${errors.telephone_cell ? 'border-red-500 focus:ring-red-100' : 'border-gray-200 focus:border-blue-500 focus:ring-blue-100'}`}
-          />
-          {errors.telephone_cell && <p className="text-sm text-red-600 mt-2 font-medium">⚠️ {errors.telephone_cell}</p>}
-        </div>
-
-        {/* Home Phone - Optional for both */}
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">Home Phone</label>
-          <input
-            type="tel"
-            value={formData.telephone_home}
-            onChange={(e) => setFormData({ ...formData, telephone_home: e.target.value })}
+            value={formData.email}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
             className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-200"
+            placeholder="Enter email address"
           />
         </div>
 
-        {/* Vault-specific fields */}
-        {formData.client_type === 'vault' && (
-          <>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Box Number</label>
-              <input
-                type="text"
-                value={formData.box_number}
-                onChange={(e) => setFormData({ ...formData, box_number: e.target.value })}
-                className={`w-full px-4 py-3 border-2 rounded-lg transition-all duration-200 focus:ring-4 ${errors.box_number ? 'border-red-500 focus:ring-red-100' : 'border-gray-200 focus:border-blue-500 focus:ring-blue-100'}`}
-              />
-              {errors.box_number && <p className="text-sm text-red-600 mt-2 font-medium">⚠️ {errors.box_number}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Size</label>
-              <input
-                type="text"
-                value={formData.size}
-                onChange={(e) => setFormData({ ...formData, size: e.target.value })}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-200"
-                placeholder="e.g., Small, Medium, Large"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Contract Number</label>
-              <input
-                type="text"
-                value={formData.contract_no}
-                onChange={(e) => setFormData({ ...formData, contract_no: e.target.value })}
-                className={`w-full px-4 py-3 border-2 rounded-lg transition-all duration-200 focus:ring-4 ${errors.contract_no ? 'border-red-500 focus:ring-red-100' : 'border-gray-200 focus:border-blue-500 focus:ring-blue-100'}`}
-              />
-              {errors.contract_no && <p className="text-sm text-red-600 mt-2 font-medium">⚠️ {errors.contract_no}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">ID Number</label>
-              <input
-                type="text"
-                value={formData.principal_key_holder_id_number}
-                onChange={(e) => setFormData({ ...formData, principal_key_holder_id_number: e.target.value })}
-                className={`w-full px-4 py-3 border-2 rounded-lg transition-all duration-200 focus:ring-4 ${errors.principal_key_holder_id_number ? 'border-red-500 focus:ring-red-100' : 'border-gray-200 focus:border-blue-500 focus:ring-blue-100'}`}
-              />
-              {errors.principal_key_holder_id_number && <p className="text-sm text-red-600 mt-2 font-medium">⚠️ {errors.principal_key_holder_id_number}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Occupation</label>
-              <input
-                type="text"
-                value={formData.occupation}
-                onChange={(e) => setFormData({ ...formData, occupation: e.target.value })}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-200"
-              />
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Notes - Available for both */}
-      <div>
-        <label className="block text-sm font-semibold text-gray-700 mb-2">Notes</label>
-        <textarea
-          value={formData.notes}
-          onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-          className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-200 h-24 resize-none"
-          placeholder="Any additional information about this client..."
-        />
+        {/* Notes - Optional */}
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Notes (Optional)</label>
+          <textarea
+            value={formData.notes}
+            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-200 h-24 resize-none"
+            placeholder="Any additional information about this client..."
+          />
+        </div>
       </div>
 
       <div className="flex items-center justify-end space-x-4 pt-6 border-t-2 border-gray-200">
@@ -720,8 +605,8 @@ function CompleteCallStep({
           </button>
         </div>
         <div className="ml-12 space-y-1">
-          <p className="font-bold text-gray-900 text-lg">{client.principal_key_holder}</p>
-          <p className="text-sm text-gray-700">📦 Box: {client.box_number} • 📱 {client.telephone_cell}</p>
+          <p className="font-bold text-gray-900 text-lg">{client.name}</p>
+          <p className="text-sm text-gray-700">📱 Phone: {client.phone}{client.email ? ` • 📧 ${client.email}` : ''}</p>
           <p className="text-sm text-green-700 font-semibold">⏱️ Duration: {formatDuration(duration)}</p>
         </div>
       </div>
@@ -790,10 +675,35 @@ function CompleteCallStep({
             <label className="block text-sm font-semibold text-gray-700 mb-2">Callback Time</label>
             <input
               type="datetime-local"
-              value={formData.callback_time}
-              onChange={(e) => setFormData({ ...formData, callback_time: e.target.value })}
+              value={formData.callback_time ? (() => {
+                // If callback_time is ISO string, convert to local time
+                if (formData.callback_time.includes('T') && formData.callback_time.includes('Z')) {
+                  const date = new Date(formData.callback_time)
+                  const offset = date.getTimezoneOffset()
+                  const localDate = new Date(date.getTime() - offset * 60000)
+                  return localDate.toISOString().slice(0, 16)
+                }
+                // Otherwise return as-is (already in local format)
+                return formData.callback_time.slice(0, 16)
+              })() : ''}
+              onChange={(e) => {
+                if (e.target.value) {
+                  // Convert local datetime to UTC ISO string
+                  const localDate = new Date(e.target.value)
+                  const offset = localDate.getTimezoneOffset()
+                  const utcDate = new Date(localDate.getTime() + offset * 60000)
+                  setFormData({ ...formData, callback_time: utcDate.toISOString() })
+                } else {
+                  setFormData({ ...formData, callback_time: '' })
+                }
+              }}
               className="w-full px-4 py-3 border-2 border-amber-300 rounded-lg focus:border-amber-500 focus:ring-4 focus:ring-amber-100 transition-all duration-200"
-              min={new Date().toISOString().slice(0, 16)}
+              min={(() => {
+                const now = new Date()
+                const offset = now.getTimezoneOffset()
+                const localNow = new Date(now.getTime() - offset * 60000)
+                return localNow.toISOString().slice(0, 16)
+              })()}
             />
           </div>
         )}

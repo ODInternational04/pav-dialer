@@ -70,7 +70,7 @@ export default function ThreeCXCallButton({
     if (disabled) return
 
     try {
-      const callSession = threeCXService.initiateCall(client.id, client.telephone_cell)
+      const callSession = threeCXService.initiateCall(client.id, client.phone)
       setActiveCall(callSession)
       // Don't show notification by default - only on error
       
@@ -181,7 +181,7 @@ export default function ThreeCXCallButton({
                   <>
                     <p className="font-medium mb-1">📱 3CX Desktop App Launched</p>
                     <p className="text-sm">
-                      The 3CX desktop application is launching to call <strong>{threeCXService.formatPhoneNumber(client.telephone_cell)}</strong>. 
+                      The 3CX desktop application is launching to call <strong>{threeCXService.formatPhoneNumber(client.phone)}</strong>. 
                       The call should start automatically in your desktop app.
                     </p>
                   </>
@@ -196,7 +196,7 @@ export default function ThreeCXCallButton({
                         <p className="font-medium text-blue-800 mb-1">Steps to call:</p>
                         <ol className="list-decimal list-inside space-y-1 text-blue-700">
                           <li>Open your <strong>3CX Desktop Application</strong></li>
-                          <li>Use the dialer to call: <code className="bg-white px-2 py-1 rounded font-mono text-lg">{threeCXService.formatPhoneNumber(client.telephone_cell)}</code></li>
+                          <li>Use the dialer to call: <code className="bg-white px-2 py-1 rounded font-mono text-lg">{threeCXService.formatPhoneNumber(client.phone)}</code></li>
                           <li>Click "End Call" below when finished</li>
                         </ol>
                       </div>
@@ -216,7 +216,7 @@ export default function ThreeCXCallButton({
                         <li><strong>If dialog appeared:</strong> Select "3CX Desktop App" and check "Always use this app"</li>
                         <li><strong>If no dialog:</strong> Go to Windows Settings → Apps → Default Apps → Phone</li>
                         <li><strong>Select 3CX Desktop App</strong> as your default phone handler</li>
-                        <li>Then try calling again: <code className="bg-red-100 px-1 rounded">{threeCXService.formatPhoneNumber(client.telephone_cell)}</code></li>
+                        <li>Then try calling again: <code className="bg-red-100 px-1 rounded">{threeCXService.formatPhoneNumber(client.phone)}</code></li>
                       </ul>
                       <p className="mt-2 text-xs text-gray-600">
                         💡 Once set, future calls will open directly in 3CX Desktop App
@@ -248,7 +248,7 @@ export default function ThreeCXCallButton({
       onClick={handleStartCall}
       disabled={disabled}
       className={`${getSizeClasses()} ${getVariantClasses()} border rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
-      title={`Call ${client.telephone_cell} via 3CX`}
+      title={`Call ${client.phone} via 3CX`}
     >
       <PhoneIcon className={getIconSize()} />
     </button>

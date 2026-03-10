@@ -21,23 +21,16 @@ export async function GET(request: NextRequest) {
       .from('clients')
       .select(`
         id,
-        box_number,
-        size,
-        contract_no,
-        principal_key_holder,
-        principal_key_holder_email_address,
-        telephone_cell,
-        telephone_home,
-        contract_start_date,
-        contract_end_date,
-        client_type,
+        name,
+        phone,
+        email,
         notes,
         created_at,
         updated_at,
         created_by,
         last_updated_by
       `)
-      .or(`telephone_cell.ilike.%${query}%,telephone_home.ilike.%${query}%,principal_key_holder.ilike.%${query}%,box_number.ilike.%${query}%,contract_no.ilike.%${query}%,principal_key_holder_email_address.ilike.%${query}%`)
+      .or(`phone.ilike.%${query}%,name.ilike.%${query}%,email.ilike.%${query}%`)
       .order('updated_at', { ascending: false })
       .limit(10)
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { verifyToken } from '@/lib/auth'
+import { serverCache } from '@/lib/cache'
 
 export async function GET(request: NextRequest) {
   try {
@@ -33,10 +34,10 @@ export async function GET(request: NextRequest) {
         *,
         clients:client_id (
           id,
-          box_number,
-          principal_key_holder,
-          telephone_cell,
-          contract_no
+          name,
+          phone,
+          email,
+          notes
         ),
         users:user_id (
           id,
@@ -66,7 +67,7 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       // Search in client name, phone, or notes
-      query = query.or(`clients.principal_key_holder.ilike.%${search}%,clients.telephone_cell.ilike.%${search}%,notes.ilike.%${search}%`)
+      query = query.or(`clients.name.ilike.%${search}%,clients.phone.ilike.%${search}%,notes.ilike.%${search}%`)
     }
 
     if (startDate) {
@@ -74,7 +75,9 @@ export async function GET(request: NextRequest) {
     }
 
     if (endDate) {
-      query = query.lte('created_at', endDate)
+      // Append end-of-day time so today's records are included
+      const endOfDay = endDate.includes('T') ? endDate : `${endDate}T23:59:59.999Z`
+      query = query.lte('created_at', endOfDay)
     }
 
     // For non-admin users, only show their own calls
@@ -104,7 +107,8 @@ export async function GET(request: NextRequest) {
       countQuery = countQuery.gte('created_at', startDate)
     }
     if (endDate) {
-      countQuery = countQuery.lte('created_at', endDate)
+      const endOfDay = endDate.includes('T') ? endDate : `${endDate}T23:59:59.999Z`
+      countQuery = countQuery.lte('created_at', endOfDay)
     }
     if (decoded.role !== 'admin') {
       countQuery = countQuery.eq('user_id', decoded.userId)
@@ -123,13 +127,18 @@ export async function GET(request: NextRequest) {
 
     const totalPages = Math.ceil((count || 0) / limit)
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       callLogs,
       totalCount: count || 0,
       page,
       limit,
       totalPages,
     })
+    
+    // Add cache headers for better performance (30 second cache)
+    response.headers.set('Cache-Control', 'private, s-maxage=10, stale-while-revalidate=30')
+    
+    return response
   } catch (error) {
     console.error('Error in call logs GET:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -197,10 +206,10 @@ export async function POST(request: NextRequest) {
         *,
         clients:client_id (
           id,
-          box_number,
-          principal_key_holder,
-          telephone_cell,
-          contract_no
+          name,
+          phone,
+          email,
+          notes
         ),
         users:user_id (
           id,
@@ -224,7 +233,7 @@ export async function POST(request: NextRequest) {
         call_log_id: callLog.id,
         type: 'callback',
         title: 'Callback Reminder',
-        message: `Callback scheduled for ${callLog.clients?.principal_key_holder} (${callLog.clients?.telephone_cell})`,
+        message: `Callback scheduled for ${callLog.clients?.name} (${callLog.clients?.phone})`,
         scheduled_for: callback_time,
       }
 

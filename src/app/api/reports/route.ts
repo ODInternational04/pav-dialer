@@ -115,6 +115,9 @@ export async function GET(request: NextRequest) {
         end_date: queryEndDate
       })
       
+      // If RPC function doesn't exist, error is returned (not thrown) — force fallback
+      if (userStatsErr) throw userStatsErr
+      
       userStats = userStatsData || []
       userStatsError = userStatsErr
       
@@ -262,6 +265,9 @@ export async function GET(request: NextRequest) {
         end_date: queryEndDate
       })
       
+      // If RPC function doesn't exist, error is returned (not thrown) — force fallback
+      if (systemStatsErr) throw systemStatsErr
+      
       systemStats = systemStatsData || []
       systemStatsError = systemStatsErr
     } catch (error) {
@@ -314,7 +320,7 @@ export async function GET(request: NextRequest) {
         client_id,
         notes,
         users:user_id (first_name, last_name, email),
-        clients:client_id (principal_key_holder, box_number, telephone_cell)
+        clients:client_id (name, phone, email)
       `)
       .gte('created_at', queryStartDate)
       .lte('created_at', queryEndDate)
@@ -360,10 +366,9 @@ export async function GET(request: NextRequest) {
         ),
         clients:client_id (
           id,
-          principal_key_holder,
-          box_number,
-          telephone_cell,
-          contract_no
+          name,
+          phone,
+          email
         )
       `)
       .gte('created_at', queryStartDate)
@@ -397,30 +402,32 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch detailed call logs' }, { status: 500 })
     }
 
-    // Get top performing users
-    let topUsersQuery = supabase
-      .from('call_statistics')
-      .select(`
-        user_id,
-        total_calls,
-        success_rate,
-        users:user_id (first_name, last_name, email)
-      `)
-      .gte('date', queryStartDate.split('T')[0])
-      .lte('date', queryEndDate.split('T')[0])
-      .order('success_rate', { ascending: false })
-      .limit(10)
+    // Get top performing users (from call_statistics view if available, otherwise skip)
+    let topUsers: any[] = []
+    try {
+      let topUsersQuery = supabase
+        .from('call_statistics')
+        .select(`
+          user_id,
+          total_calls,
+          success_rate,
+          users:user_id (first_name, last_name, email)
+        `)
+        .gte('date', queryStartDate.split('T')[0])
+        .lte('date', queryEndDate.split('T')[0])
+        .order('success_rate', { ascending: false })
+        .limit(10)
 
-    // Apply user filters if specified
-    if (userIds.length > 0) {
-      topUsersQuery = topUsersQuery.in('user_id', userIds)
-    }
+      if (userIds.length > 0) {
+        topUsersQuery = topUsersQuery.in('user_id', userIds)
+      }
 
-    const { data: topUsers, error: topUsersError } = await topUsersQuery
-
-    if (topUsersError) {
-      console.error('Error fetching top users:', topUsersError)
-      return NextResponse.json({ error: 'Failed to fetch top users' }, { status: 500 })
+      const { data: topUsersData, error: topUsersError } = await topUsersQuery
+      if (!topUsersError) {
+        topUsers = topUsersData || []
+      }
+    } catch (error) {
+      console.log('call_statistics table not available, skipping top users')
     }
 
     // Get callback completion rates
@@ -459,9 +466,9 @@ export async function GET(request: NextRequest) {
         user_id,
         users:user_id (first_name, last_name, email),
         clients:client_id (
-          principal_key_holder,
-          telephone_cell,
-          box_number
+          name,
+          phone,
+          email
         )
       `)
       .gte('created_at', queryStartDate)
@@ -530,8 +537,8 @@ export async function GET(request: NextRequest) {
       filteredDetailedCallLogs = filteredDetailedCallLogs.filter((call: any) => 
         (call.users?.first_name || '').toLowerCase().includes(term) ||
         (call.users?.last_name || '').toLowerCase().includes(term) ||
-        (call.clients?.principal_key_holder || '').toLowerCase().includes(term) ||
-        (call.clients?.telephone_cell || '').toLowerCase().includes(term) ||
+        (call.clients?.name || '').toLowerCase().includes(term) ||
+        (call.clients?.phone || '').toLowerCase().includes(term) ||
         (call.call_status || '').toLowerCase().includes(term) ||
         (call.notes || '').toLowerCase().includes(term)
       )

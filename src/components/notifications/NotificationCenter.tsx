@@ -289,7 +289,7 @@ export default function NotificationCenter({ isOpen, onClose }: NotificationCent
                           
                           {notification.clients && (
                             <span className="text-xs text-gray-500">
-                              {notification.clients.principal_key_holder} - {notification.clients.telephone_cell}
+                              {notification.clients.name} - {notification.clients.phone}
                             </span>
                           )}
                         </div>

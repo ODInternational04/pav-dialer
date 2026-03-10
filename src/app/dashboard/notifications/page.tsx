@@ -26,11 +26,10 @@ interface Notification {
   call_log_id?: string
   client?: {
     id: string
-    principal_key_holder: string
-    telephone_cell: string
-    telephone_home?: string
+    name: string
+    phone: string
     email?: string
-    box_number: string
+    notes?: string
   }
 }
 
@@ -351,17 +350,17 @@ export default function NotificationsPage() {
                               <h4 className="font-medium text-gray-900">Client Details:</h4>
                               <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
                                 <div>
-                                  <span className="text-gray-500">Name:</span> {notification.client.principal_key_holder}
+                                  <span className="text-gray-500">Name:</span> {notification.client.name}
                                 </div>
                                 <div>
-                                  <span className="text-gray-500">Box:</span> {notification.client.box_number}
+                                  <span className="text-gray-500">Phone:</span> {notification.client.phone}
                                 </div>
                                 <div>
-                                  <span className="text-gray-500">Mobile:</span> {notification.client.telephone_cell}
+                                  <span className="text-gray-500">Email:</span> {notification.client.email || 'N/A'}
                                 </div>
-                                {notification.client.telephone_home && (
+                                {notification.client.notes && (
                                   <div>
-                                    <span className="text-gray-500">Home:</span> {notification.client.telephone_home}
+                                    <span className="text-gray-500">Notes:</span> {notification.client.notes}
                                   </div>
                                 )}
                               </div>

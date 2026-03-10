@@ -19,9 +19,10 @@ interface UserCallStatus {
   current_call_client_id?: string
   clients?: {
     id: string
-    principal_key_holder: string
-    telephone_cell: string
-    box_number: string
+    name: string
+    phone: string
+    email: string
+    notes: string
   }
 }
 
@@ -181,14 +182,16 @@ export default function UserStatusDisplay({ showOnlyOnCall = false, compact = fa
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
                 <div>
-                  <span className="text-gray-500">Client:</span> {userItem.clients.principal_key_holder}
+                  <span className="text-gray-500">Client:</span> {userItem.clients.name}
                 </div>
                 <div>
-                  <span className="text-gray-500">Box:</span> {userItem.clients.box_number}
+                  <span className="text-gray-500">Phone:</span> {userItem.clients.phone}
                 </div>
-                <div>
-                  <span className="text-gray-500">Phone:</span> {userItem.clients.telephone_cell}
-                </div>
+                {userItem.clients.email && (
+                  <div>
+                    <span className="text-gray-500">Email:</span> {userItem.clients.email}
+                  </div>
+                )}
                 {userItem.call_started_at && (
                   <div className="flex items-center space-x-1">
                     <ClockIcon className="w-3 h-3 text-gray-400" />

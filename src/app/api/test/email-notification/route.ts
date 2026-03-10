@@ -35,10 +35,10 @@ export async function POST(request: NextRequest) {
       updated_at: new Date().toISOString(),
       clients: {
         id: 'test-client-id',
-        principal_key_holder: 'Test Client',
-        box_number: 'BOX001',
-        telephone_cell: '555-0123',
-        contract_no: 'CONTRACT001'
+        name: 'Test Client',
+        phone: '555-0123',
+        email: 'testclient@example.com',
+        notes: 'Test client for email notification'
       }
     }
 

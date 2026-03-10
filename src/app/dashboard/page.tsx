@@ -139,10 +139,10 @@ export default function Dashboard() {
           id: call.id || index.toString(),
           type: call.call_status === 'completed' ? 'call' : call.callback_requested ? 'callback' : 'call',
           description: call.call_status === 'completed' 
-            ? `Successful call with ${call.clients?.principal_key_holder || 'client'}` 
+            ? `Successful call with ${call.clients?.name || 'client'}` 
             : call.callback_requested 
-            ? `Callback scheduled for ${call.clients?.principal_key_holder || 'client'}`
-            : `Call attempt with ${call.clients?.principal_key_holder || 'client'}`,
+            ? `Callback scheduled for ${call.clients?.name || 'client'}`
+            : `Call attempt with ${call.clients?.name || 'client'}`,
           time: call.created_at ? new Date(call.created_at).toLocaleString() : 'Recently',
           status: call.call_status === 'completed' ? 'success' : 
                   call.call_status === 'no_answer' || call.call_status === 'busy' ? 'pending' : 'failed',
@@ -162,10 +162,10 @@ export default function Dashboard() {
         const callbackActivities = callbacksData.callbacks?.slice(0, 2).map((callback: any, index: number) => ({
           id: `callback-${callback.id || index}`,
           type: 'callback',
-          description: `Callback ${callback.callback_status === 'overdue' ? 'overdue' : 'scheduled'} for ${callback.clients?.principal_key_holder || 'client'}`,
+          description: `Callback ${callback.callback_status === 'overdue' ? 'overdue' : 'scheduled'} for ${callback.clients?.name || 'client'}`,
           time: callback.callback_time ? new Date(callback.callback_time).toLocaleString() : 'Recently',
           status: callback.callback_status === 'overdue' ? 'failed' : 'pending',
-          details: `Phone: ${callback.clients?.telephone_cell || 'N/A'}`
+          details: `Phone: ${callback.clients?.phone || 'N/A'}`
         })) || []
         
         // Combine activities with callbacks

@@ -32,11 +32,10 @@ export async function GET(request: NextRequest) {
         *,
         clients:client_id (
           id,
-          box_number,
-          principal_key_holder,
-          telephone_cell,
-          telephone_home,
-          principal_key_holder_email_address
+          name,
+          phone,
+          email,
+          notes
         ),
         call_logs:call_log_id (
           id,
@@ -183,9 +182,9 @@ export async function POST(request: NextRequest) {
         *,
         clients:client_id (
           id,
-          box_number,
-          principal_key_holder,
-          telephone_cell
+          name,
+          phone,
+          email
         ),
         call_logs:call_log_id (
           id,

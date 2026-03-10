@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { verifyToken } from '@/lib/auth'
+import { serverCache } from '@/lib/cache'
 
 export async function GET(request: NextRequest) {
   try {
@@ -28,10 +29,10 @@ export async function GET(request: NextRequest) {
         *,
         clients:client_id (
           id,
-          box_number,
-          principal_key_holder,
-          telephone_cell,
-          contract_no
+          name,
+          phone,
+          email,
+          notes
         ),
         users:user_id (
           id,
@@ -92,13 +93,18 @@ export async function GET(request: NextRequest) {
 
     const totalPages = Math.ceil((count || 0) / limit)
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       callbacks: callbacksWithStatus,
       totalCount: count || 0,
       page,
       limit,
       totalPages,
     })
+    
+    // Add cache headers for better performance
+    response.headers.set('Cache-Control', 'private, s-maxage=10, stale-while-revalidate=30')
+    
+    return response
   } catch (error) {
     console.error('Error in callbacks GET:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

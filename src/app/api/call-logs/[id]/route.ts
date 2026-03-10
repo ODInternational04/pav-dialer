@@ -25,10 +25,10 @@ export async function GET(
         *,
         clients:client_id (
           id,
-          box_number,
-          principal_key_holder,
-          telephone_cell,
-          contract_no
+          name,
+          phone,
+          email,
+          notes
         ),
         users:user_id (
           id,
@@ -130,10 +130,10 @@ export async function PUT(
         *,
         clients:client_id (
           id,
-          box_number,
-          principal_key_holder,
-          telephone_cell,
-          contract_no
+          name,
+          phone,
+          email,
+          notes
         ),
         users:user_id (
           id,
@@ -165,7 +165,7 @@ export async function PUT(
           .from('notifications')
           .update({
             scheduled_for: callback_time,
-            message: `Callback scheduled for ${callLog.clients?.principal_key_holder} (${callLog.clients?.telephone_cell})`,
+            message: `Callback scheduled for ${callLog.clients?.name} (${callLog.clients?.phone})`,
           })
           .eq('id', existingNotification.id)
       } else {
@@ -178,7 +178,7 @@ export async function PUT(
             call_log_id: id,
             type: 'callback',
             title: 'Callback Reminder',
-            message: `Callback scheduled for ${callLog.clients?.principal_key_holder} (${callLog.clients?.telephone_cell})`,
+            message: `Callback scheduled for ${callLog.clients?.name} (${callLog.clients?.phone})`,
             scheduled_for: callback_time,
           })
       }

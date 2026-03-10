@@ -51,22 +51,13 @@ export function parseCSV(csvText: string): CSVRow[] {
 
 /**
  * Field mapping from CSV headers to client fields
- * Supports multiple header variations
+ * Supports multiple header variations for simplified 4-field schema
  */
 const FIELD_MAPPINGS: Record<string, string[]> = {
-  box_number: ['box_number', 'box number', 'box', 'box_no', 'box no'],
-  size: ['size', 'box_size', 'box size'],
-  contract_no: ['contract_no', 'contract number', 'contract', 'contract_number'],
-  principal_key_holder: ['principal_key_holder', 'key holder', 'name', 'client name', 'principal'],
-  principal_key_holder_id_number: ['principal_key_holder_id_number', 'id number', 'id_number', 'id no', 'id'],
-  principal_key_holder_email_address: ['principal_key_holder_email_address', 'email', 'email address', 'email_address'],
-  telephone_cell: ['telephone_cell', 'cell', 'mobile', 'phone', 'cell number', 'mobile number'],
-  telephone_home: ['telephone_home', 'home', 'home phone', 'landline'],
-  contract_start_date: ['contract_start_date', 'start date', 'start_date', 'contract start'],
-  contract_end_date: ['contract_end_date', 'end date', 'end_date', 'contract end'],
-  occupation: ['occupation', 'job', 'profession', 'work'],
+  name: ['name', 'client name', 'full name', 'principal_key_holder', 'key holder', 'principal'],
+  phone: ['phone', 'telephone', 'telephone_cell', 'cell', 'mobile', 'phone number', 'cell number', 'mobile number'],
+  email: ['email', 'email address', 'email_address', 'principal_key_holder_email_address'],
   notes: ['notes', 'comments', 'remarks', 'note'],
-  gender: ['gender', 'sex'],
 }
 
 /**
@@ -82,15 +73,7 @@ function mapCSVRowToClient(row: CSVRow): Partial<CreateClientRequest> {
       const matchingKey = Object.keys(row).find(key => key.toLowerCase() === headerLower)
       
       if (matchingKey && row[matchingKey]) {
-        // Special handling for gender field
-        if (clientField === 'gender') {
-          const genderValue = row[matchingKey].toLowerCase()
-          if (['male', 'female', 'other', 'unknown'].includes(genderValue)) {
-            client.gender = genderValue as 'male' | 'female' | 'other' | 'unknown'
-          }
-        } else {
-          client[clientField as keyof CreateClientRequest] = row[matchingKey] as any
-        }
+        client[clientField as keyof CreateClientRequest] = row[matchingKey] as any
         mappedHeaders.add(matchingKey)
         break
       }
@@ -117,28 +100,15 @@ function mapCSVRowToClient(row: CSVRow): Partial<CreateClientRequest> {
  */
 function validateClient(client: Partial<CreateClientRequest>, rowNumber: number): ValidationError[] {
   const errors: ValidationError[] = []
-  const identifierPresent = !!client.box_number || !!client.contract_no
 
-  // Required fields
+  // Required fields for simplified schema: name and phone
   const requiredFields: Array<keyof CreateClientRequest> = [
-    'box_number',
-    'size',
-    'contract_no',
-    'principal_key_holder',
-    'principal_key_holder_id_number',
-    'principal_key_holder_email_address',
-    'telephone_cell',
-    'contract_start_date',
-    'contract_end_date',
-    'occupation',
+    'name',
+    'phone',
   ]
 
   for (const field of requiredFields) {
     if (!client[field] || String(client[field]).trim() === '') {
-      // Allow partial rows if identifying an existing client
-      if (identifierPresent) {
-        continue
-      }
       errors.push({
         row: rowNumber,
         field,
@@ -148,65 +118,28 @@ function validateClient(client: Partial<CreateClientRequest>, rowNumber: number)
     }
   }
 
-  // Email validation
-  if (client.principal_key_holder_email_address) {
+  // Email validation (optional field)
+  if (client.email) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(client.principal_key_holder_email_address)) {
+    if (!emailRegex.test(client.email)) {
       errors.push({
         row: rowNumber,
-        field: 'principal_key_holder_email_address',
+        field: 'email',
         message: 'Invalid email format',
-        value: client.principal_key_holder_email_address,
+        value: client.email,
       })
     }
   }
 
   // Phone validation (basic - should have at least 9 digits)
-  if (client.telephone_cell) {
-    const digitsOnly = client.telephone_cell.replace(/\D/g, '')
+  if (client.phone) {
+    const digitsOnly = client.phone.replace(/\D/g, '')
     if (digitsOnly.length < 9) {
       errors.push({
         row: rowNumber,
-        field: 'telephone_cell',
+        field: 'phone',
         message: 'Phone number must have at least 9 digits',
-        value: client.telephone_cell,
-      })
-    }
-  }
-
-  // Date validation
-  if (client.contract_start_date) {
-    const date = new Date(client.contract_start_date)
-    if (isNaN(date.getTime())) {
-      errors.push({
-        row: rowNumber,
-        field: 'contract_start_date',
-        message: 'Invalid date format (use YYYY-MM-DD)',
-        value: client.contract_start_date,
-      })
-    }
-  }
-
-  if (client.contract_end_date) {
-    const date = new Date(client.contract_end_date)
-    if (isNaN(date.getTime())) {
-      errors.push({
-        row: rowNumber,
-        field: 'contract_end_date',
-        message: 'Invalid date format (use YYYY-MM-DD)',
-        value: client.contract_end_date,
-      })
-    }
-  }
-
-  // ID number validation (basic - should be alphanumeric)
-  if (client.principal_key_holder_id_number) {
-    if (client.principal_key_holder_id_number.length < 5) {
-      errors.push({
-        row: rowNumber,
-        field: 'principal_key_holder_id_number',
-        message: 'ID number must be at least 5 characters',
-        value: client.principal_key_holder_id_number,
+        value: client.phone,
       })
     }
   }
@@ -258,22 +191,13 @@ export function processCSVImport(csvText: string): CSVImportResult {
 }
 
 /**
- * Generate CSV template with headers
+ * Generate CSV template with headers for simplified schema
  */
 export function generateCSVTemplate(): string {
   const headers = [
-    'box_number',
-    'size',
-    'contract_no',
-    'principal_key_holder',
-    'principal_key_holder_id_number',
-    'principal_key_holder_email_address',
-    'telephone_cell',
-    'telephone_home',
-    'contract_start_date',
-    'contract_end_date',
-    'occupation',
-    'gender',
+    'name',
+    'phone',
+    'email',
     'notes',
   ]
 

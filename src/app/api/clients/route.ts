@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { verifyToken, extractTokenFromHeader } from '@/lib/auth'
-import { validateInput, clientValidationSchema, sanitizeObject } from '@/lib/validation'
 import { CreateClientRequest } from '@/types'
+import { serverCache } from '@/lib/cache'
 
 /**
  * GET /api/clients - Retrieve clients with pagination and filtering
- * Security: Requires valid JWT token, applies rate limiting via middleware
  */
 export async function GET(request: NextRequest) {
   try {
@@ -16,7 +15,7 @@ export async function GET(request: NextRequest) {
     
     if (!token) {
       return NextResponse.json(
-        { error: 'Authentication required', code: 'MISSING_TOKEN' },
+        { error: 'Authentication required' },
         { status: 401 }
       )
     }
@@ -24,257 +23,137 @@ export async function GET(request: NextRequest) {
     const payload = verifyToken(token)
     if (!payload) {
       return NextResponse.json(
-        { error: 'Invalid or expired token', code: 'INVALID_TOKEN' },
+        { error: 'Invalid or expired token' },
         { status: 401 }
       )
     }
 
-    // Input validation and sanitization
     const { searchParams } = new URL(request.url)
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '10'))) // Max 100 per page
-    const search = sanitizeString(searchParams.get('search') || '')
-    const callStatus = validateCallStatus(searchParams.get('callStatus') || 'all')
-    const clientType = validateClientType(searchParams.get('clientType') || 'all')
-    const sortBy = validateSortBy(searchParams.get('sortBy') || 'created_at')
-    const sortOrder = validateSortOrder(searchParams.get('sortOrder') || 'desc')
-    const campaignId = searchParams.get('campaign_id') || ''
-
-    // Determine which client types the user can access based on their permissions
-    const canAccessVault = payload.can_access_vault_clients ?? true
-    const canAccessGold = payload.can_access_gold_clients ?? false
-    
-    // Build allowed client types array
-    const allowedClientTypes: string[] = []
-    if (canAccessVault) allowedClientTypes.push('vault')
-    if (canAccessGold) allowedClientTypes.push('gold')
-    
-    // If user has no access to any client type, return empty result
-    if (allowedClientTypes.length === 0) {
-      return NextResponse.json({
-        clients: [],
-        totalCount: 0,
-        page: 1,
-        limit,
-        totalPages: 0,
-        metadata: {
-          requestId: request.headers.get('x-request-id'),
-          timestamp: new Date().toISOString(),
-          userId: payload.userId
-        }
-      })
-    }
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '10')))
+    const search = searchParams.get('search') || ''
+    const callStatus = searchParams.get('callStatus') || 'all'
     
     const start = (page - 1) * limit
     const end = start + limit - 1
 
-    // Check user's campaign access if not admin
-    let allowedCampaignIds: string[] = []
-    if (payload.role !== 'admin') {
-      const { data: userCampaigns } = await supabase
-        .from('user_campaign_assignments')
-        .select('campaign_id')
-        .eq('user_id', payload.userId)
-      
-      allowedCampaignIds = userCampaigns?.map(uc => uc.campaign_id) || []
-      
-      // Note: Users can still see clients even without campaign assignments
-      // Campaign filtering will be applied in queries if campaigns are assigned
+    let query = supabase
+      .from('clients')
+      .select('*', { count: 'exact' })
+
+    // Apply search filter
+    if (search) {
+      query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%,email.ilike.%${search}%`)
     }
 
-    let clientsData
-    let totalCount = 0
+    const { data: clients, error, count } = await query
+      .range(start, end)
+      .order('created_at', { ascending: false })
 
-    try {
-      if (callStatus === 'called') {
-        // Get clients who have been called (have call logs)
-        let query = supabase
-          .from('clients')
-          .select(`
-            *,
-            created_by_user:users!clients_created_by_fkey(first_name, last_name),
-            last_updated_by_user:users!clients_last_updated_by_fkey(first_name, last_name),
-            campaigns(id, name, department, status),
-            call_logs(id, call_status, created_at, call_type)
-          `, { count: 'exact' })
-          .not('call_logs', 'is', null)
-        
-        // Apply user permission-based client type filtering
-        if (allowedClientTypes.length === 1) {
-          // User can only access one type
-          query = query.eq('client_type', allowedClientTypes[0])
-        } else if (allowedClientTypes.length === 2) {
-          // User can access both types - apply requested filter if specified
-          if (clientType !== 'all') {
-            query = query.eq('client_type', clientType)
-          }
-        }
-        
-        // Apply campaign filtering
-        if (campaignId && campaignId !== 'all') {
-          query = query.eq('campaign_id', campaignId)
-        } else if (payload.role !== 'admin' && allowedCampaignIds.length > 0) {
-          query = query.in('campaign_id', allowedCampaignIds)
-        }
-        
-        const { data: clientsWithCalls, error: callError, count } = await query
-          .range(start, end)
-          .order(mapSortByToColumn(sortBy), { ascending: sortOrder === 'asc' })
-
-        if (callError) throw callError
-
-        if (search && clientsWithCalls) {
-          const filteredClients = clientsWithCalls.filter(client =>
-            searchInClient(client, search)
-          )
-          clientsData = filteredClients
-          totalCount = filteredClients.length
-        } else {
-          clientsData = clientsWithCalls
-          totalCount = count || 0
-        }
-
-      } else if (callStatus === 'not_called') {
-        // Get all clients first
-        let clientQuery = supabase
-          .from('clients')
-          .select(`
-            *,
-            created_by_user:users!clients_created_by_fkey(first_name, last_name),
-            last_updated_by_user:users!clients_last_updated_by_fkey(first_name, last_name),
-            campaigns(id, name, department, status)
-          `)
-        
-        // Apply user permission-based client type filtering
-        if (allowedClientTypes.length === 1) {
-          // User can only access one type
-          clientQuery = clientQuery.eq('client_type', allowedClientTypes[0])
-        } else if (allowedClientTypes.length === 2) {
-          // User can access both types - apply requested filter if specified
-          if (clientType !== 'all') {
-            clientQuery = clientQuery.eq('client_type', clientType)
-          }
-        }
-        
-        // Apply campaign filtering
-        if (campaignId && campaignId !== 'all') {
-          clientQuery = clientQuery.eq('campaign_id', campaignId)
-        } else if (payload.role !== 'admin' && allowedCampaignIds.length > 0) {
-          clientQuery = clientQuery.in('campaign_id', allowedCampaignIds)
-        }
-        
-        const { data: allClients, error: allError } = await clientQuery
-
-        if (allError) throw allError
-
-        // Get clients who have call logs
-        const { data: calledClientIds, error: calledError } = await supabase
-          .from('call_logs')
-          .select('client_id')
-
-        if (calledError) throw calledError
-
-        const calledIds = new Set(calledClientIds?.map(log => log.client_id) || [])
-        
-        // Filter out clients who have been called
-        let notCalledClients = allClients?.filter(client => !calledIds.has(client.id)) || []
-
-        // Apply search filter
-        if (search) {
-          notCalledClients = notCalledClients.filter(client =>
-            searchInClient(client, search)
-          )
-        }
-
-        // Apply sorting
-        notCalledClients.sort((a, b) => sortClients(a, b, sortBy, sortOrder))
-
-        totalCount = notCalledClients.length
-        clientsData = notCalledClients.slice(start, end)
-
-      } else {
-        // Get all clients with call log counts
-        let allQuery = supabase
-          .from('clients')
-          .select(`
-            *,
-            created_by_user:users!clients_created_by_fkey(first_name, last_name),
-            last_updated_by_user:users!clients_last_updated_by_fkey(first_name, last_name),
-            campaigns(id, name, department, status),
-            call_logs(id, call_status, created_at, call_type)
-          `, { count: 'exact' })
-        
-        // Apply user permission-based client type filtering
-        if (allowedClientTypes.length === 1) {
-          // User can only access one type
-          allQuery = allQuery.eq('client_type', allowedClientTypes[0])
-        } else if (allowedClientTypes.length === 2) {
-          // User can access both types - apply requested filter if specified
-          if (clientType !== 'all') {
-            allQuery = allQuery.eq('client_type', clientType)
-          }
-        }
-        
-        // Apply campaign filtering
-        if (campaignId && campaignId !== 'all') {
-          allQuery = allQuery.eq('campaign_id', campaignId)
-        } else if (payload.role !== 'admin' && allowedCampaignIds.length > 0) {
-          allQuery = allQuery.in('campaign_id', allowedCampaignIds)
-        }
-        
-        const { data: allClientsData, error: allError, count } = await allQuery
-          .range(start, end)
-          .order(mapSortByToColumn(sortBy), { ascending: sortOrder === 'asc' })
-
-        if (allError) throw allError
-
-        if (search && allClientsData) {
-          const filteredClients = allClientsData.filter(client =>
-            searchInClient(client, search)
-          )
-          clientsData = filteredClients
-          totalCount = filteredClients.length
-        } else {
-          clientsData = allClientsData
-          totalCount = count || 0
-        }
-      }
-
-      // Add call statistics to each client (sanitized)
-      const clientsWithStats = clientsData?.map(client => ({
-        ...sanitizeClientData(client),
-        total_calls: client.call_logs?.length || 0,
-        last_call_date: client.call_logs && client.call_logs.length > 0 
-          ? client.call_logs.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0].created_at
-          : null,
-        has_been_called: client.call_logs && client.call_logs.length > 0
-      })) || []
-
-      return NextResponse.json({
-        clients: clientsWithStats,
-        totalCount,
-        page,
-        limit,
-        totalPages: Math.ceil(totalCount / limit),
-        metadata: {
-          requestId: request.headers.get('x-request-id'),
-          timestamp: new Date().toISOString(),
-          userId: payload.userId
-        }
-      })
-
-    } catch (dbError) {
-      console.error('Database error in clients GET:', dbError)
+    if (error) {
+      console.error('Error fetching clients:', error)
       return NextResponse.json(
-        { error: 'Database operation failed', code: 'DB_ERROR' },
+        { error: 'Failed to fetch clients' },
         { status: 500 }
       )
     }
 
+    // Efficiently get call counts for the current page of clients only
+    let enhancedClients = clients || []
+    
+    if (clients && clients.length > 0 && (callStatus === 'called' || callStatus === 'not_called' || callStatus === 'all')) {
+      const clientIds = clients.map(c => c.id)
+      
+      // Get call counts in a single query
+      const { data: callCounts } = await supabase
+        .from('call_logs')
+        .select('client_id')
+        .in('client_id', clientIds)
+        .order('created_at', { ascending: false })
+      
+      // Create a map of client_id to call info
+      const callMap = new Map<string, { count: number, lastCallDate: string | null }>()
+      
+      if (callCounts) {
+        callCounts.forEach(log => {
+          const existing = callMap.get(log.client_id)
+          if (existing) {
+            existing.count++
+          } else {
+            callMap.set(log.client_id, { count: 1, lastCallDate: null })
+          }
+        })
+      }
+      
+      // Get last call dates efficiently
+      if (callCounts && callCounts.length > 0) {
+        const { data: lastCalls } = await supabase
+          .from('call_logs')
+          .select('client_id, created_at')
+          .in('client_id', clientIds)
+          .order('created_at', { ascending: false })
+          .limit(clientIds.length)
+        
+        if (lastCalls) {
+          const lastCallMap = new Map<string, string>()
+          lastCalls.forEach(call => {
+            if (!lastCallMap.has(call.client_id)) {
+              lastCallMap.set(call.client_id, call.created_at)
+            }
+          })
+          
+          // Update call map with last call dates
+          lastCallMap.forEach((date, clientId) => {
+            const info = callMap.get(clientId)
+            if (info) {
+              info.lastCallDate = date
+            }
+          })
+        }
+      }
+
+      // Filter and enhance clients based on call status
+      enhancedClients = clients
+        .map(client => {
+          const callInfo = callMap.get(client.id) || { count: 0, lastCallDate: null }
+          return {
+            ...client,
+            total_calls: callInfo.count,
+            has_been_called: callInfo.count > 0,
+            last_call_date: callInfo.lastCallDate
+          }
+        })
+        .filter(client => {
+          if (callStatus === 'called') return client.has_been_called
+          if (callStatus === 'not_called') return !client.has_been_called
+          return true
+        })
+    } else {
+      enhancedClients = clients?.map(client => ({
+        ...client,
+        total_calls: 0,
+        has_been_called: false,
+        last_call_date: null
+      })) || []
+    }
+
+    const response = NextResponse.json({
+      clients: enhancedClients,
+      totalCount: count || 0,
+      page,
+      limit,
+      totalPages: Math.ceil((count || 0) / limit)
+    })
+    
+    // Add cache headers (15 second cache for client list)
+    response.headers.set('Cache-Control', 'private, s-maxage=15, stale-while-revalidate=30')
+    
+    return response
+
   } catch (error) {
-    console.error('Error in clients GET:', error)
+    console.error('Error in GET /api/clients:', error)
     return NextResponse.json(
-      { error: 'Internal server error', code: 'INTERNAL_ERROR' },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }
@@ -282,7 +161,6 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/clients - Create a new client
- * Security: Requires valid JWT token, input validation, sanitization
  */
 export async function POST(request: NextRequest) {
   try {
@@ -292,7 +170,7 @@ export async function POST(request: NextRequest) {
     
     if (!token) {
       return NextResponse.json(
-        { error: 'Authentication required', code: 'MISSING_TOKEN' },
+        { error: 'Authentication required' },
         { status: 401 }
       )
     }
@@ -300,269 +178,69 @@ export async function POST(request: NextRequest) {
     const payload = verifyToken(token)
     if (!payload) {
       return NextResponse.json(
-        { error: 'Invalid or expired token', code: 'INVALID_TOKEN' },
+        { error: 'Invalid or expired token' },
         { status: 401 }
       )
     }
 
-    // Parse and validate input
-    let body: CreateClientRequest
-    try {
-      body = await request.json()
-    } catch (parseError) {
+    const body: CreateClientRequest = await request.json()
+
+    // Validate required fields
+    if (!body.name || !body.phone) {
       return NextResponse.json(
-        { error: 'Invalid JSON payload', code: 'INVALID_JSON' },
+        { error: 'Name and phone are required fields' },
         { status: 400 }
       )
     }
 
-    // Sanitize input object
-    const sanitizedBody = sanitizeObject(body)
+    // Check for duplicate phone number
+    const { data: existing } = await supabase
+      .from('clients')
+      .select('id, name, phone')
+      .eq('phone', body.phone)
+      .single()
 
-    // Validate input with Zod schema
-    const validation = validateInput(clientValidationSchema, sanitizedBody)
-    if (!validation.success) {
+    if (existing) {
       return NextResponse.json(
         { 
-          error: 'Validation failed', 
-          code: 'VALIDATION_ERROR',
-          details: validation.errors 
+          error: 'Client with this phone number already exists',
+          details: `Phone number ${body.phone} is already registered to ${existing.name}`
         },
-        { status: 400 }
+        { status: 409 }
       )
     }
 
-    const validatedData = validation.data
+    // Create client
+    const clientData = {
+      name: body.name.trim(),
+      phone: body.phone.trim(),
+      email: body.email?.trim() || null,
+      notes: body.notes?.trim() || '',
+      created_by: payload.userId,
+      last_updated_by: payload.userId
+    }
 
-    try {
-      // Check if box number or contract number already exists (only for vault clients)
-      if (validatedData.client_type === 'vault' && validatedData.box_number && validatedData.contract_no) {
-        const { data: existingClient, error: checkError } = await supabase
-          .from('clients')
-          .select('id, box_number, contract_no')
-          .or(`box_number.eq.${validatedData.box_number},contract_no.eq.${validatedData.contract_no}`)
-          .single()
+    const { data: newClient, error } = await supabase
+      .from('clients')
+      .insert([clientData])
+      .select()
+      .single()
 
-        if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows found (expected)
-          throw checkError
-        }
-
-        if (existingClient) {
-          const field = existingClient.box_number === validatedData.box_number ? 'Box number' : 'Contract number'
-          return NextResponse.json(
-            { 
-              error: `${field} already exists`, 
-              code: 'DUPLICATE_ENTRY',
-              field: field.toLowerCase().replace(' ', '_')
-            },
-            { status: 409 }
-          )
-        }
-      }
-
-      // Create client with validated data
-      // For Gold clients, remove vault-specific fields to avoid database errors
-      const clientData = validatedData.client_type === 'gold' 
-        ? {
-            client_type: validatedData.client_type,
-            principal_key_holder: validatedData.principal_key_holder,
-            principal_key_holder_email_address: validatedData.principal_key_holder_email_address,
-            telephone_cell: validatedData.telephone_cell,
-            telephone_home: validatedData.telephone_home || '',
-            notes: validatedData.notes || '',
-            campaign_id: validatedData.campaign_id,
-            gender: validatedData.gender,
-            assigned_to: validatedData.assigned_to,
-            custom_fields: validatedData.custom_fields,
-            // Set vault fields to default/null values for Gold clients
-            box_number: `GOLD-${Date.now()}`, // Auto-generate unique box number
-            size: 'N/A',
-            contract_no: `GOLD-${Date.now()}`, // Auto-generate unique contract number
-            principal_key_holder_id_number: 'N/A',
-            contract_start_date: new Date().toISOString().split('T')[0],
-            contract_end_date: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 year from now
-            occupation: 'N/A',
-          }
-        : validatedData
-
-      const now = new Date().toISOString()
-      const { data: newClient, error: insertError } = await supabase
-        .from('clients')
-        .insert({
-          ...clientData,
-          notes: clientData.notes || '',
-          created_by: payload.userId,
-          last_updated_by: payload.userId,
-          created_at: now,
-          updated_at: now,
-        })
-        .select(`
-          *,
-          created_by_user:users!clients_created_by_fkey(first_name, last_name),
-          last_updated_by_user:users!clients_last_updated_by_fkey(first_name, last_name)
-        `)
-        .single()
-
-      if (insertError) {
-        console.error('Error creating client:', insertError)
-        
-        // Return appropriate error based on error type
-        if (insertError.code === '23505') { // Unique violation
-          return NextResponse.json(
-            { error: 'Duplicate entry detected', code: 'DUPLICATE_ENTRY' },
-            { status: 409 }
-          )
-        }
-        
-        throw insertError
-      }
-
+    if (error) {
+      console.error('Error creating client:', error)
       return NextResponse.json(
-        { 
-          message: 'Client created successfully',
-          client: sanitizeClientData(newClient),
-          metadata: {
-            requestId: request.headers.get('x-request-id'),
-            timestamp: new Date().toISOString(),
-            createdBy: payload.userId
-          }
-        },
-        { status: 201 }
-      )
-
-    } catch (dbError) {
-      console.error('Database error in client creation:', dbError)
-      return NextResponse.json(
-        { error: 'Database operation failed', code: 'DB_ERROR' },
+        { error: 'Failed to create client', details: error.message },
         { status: 500 }
       )
     }
 
+    return NextResponse.json(newClient, { status: 201 })
+
   } catch (error) {
-    console.error('Error in client creation:', error)
+    console.error('Error in POST /api/clients:', error)
     return NextResponse.json(
-      { error: 'Internal server error', code: 'INTERNAL_ERROR' },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }
-}
-
-// =============================================
-// HELPER FUNCTIONS
-// =============================================
-
-/**
- * Sanitizes string input to prevent XSS
- */
-function sanitizeString(input: string): string {
-  return input.trim().replace(/[<>]/g, '')
-}
-
-/**
- * Validates call status parameter
- */
-function validateCallStatus(status: string): string {
-  const validStatuses = ['all', 'called', 'not_called']
-  return validStatuses.includes(status) ? status : 'all'
-}
-
-/**
- * Validates client type parameter
- */
-function validateClientType(type: string): string {
-  const validTypes = ['all', 'vault', 'gold']
-  return validTypes.includes(type) ? type : 'all'
-}
-
-/**
- * Validates sort by parameter
- */
-function validateSortBy(sortBy: string): string {
-  const validSortFields = ['name', 'phone', 'contract', 'box_number', 'created_at']
-  return validSortFields.includes(sortBy) ? sortBy : 'created_at'
-}
-
-/**
- * Validates sort order parameter
- */
-function validateSortOrder(order: string): string {
-  return ['asc', 'desc'].includes(order) ? order : 'desc'
-}
-
-/**
- * Maps frontend sort fields to database columns
- */
-function mapSortByToColumn(sortBy: string): string {
-  const mapping: Record<string, string> = {
-    'name': 'principal_key_holder',
-    'phone': 'telephone_cell',
-    'contract': 'contract_no',
-    'box_number': 'box_number',
-    'created_at': 'created_at'
-  }
-  return mapping[sortBy] || 'created_at'
-}
-
-/**
- * Searches within client data (case-insensitive)
- */
-function searchInClient(client: any, search: string): boolean {
-  const searchLower = search.toLowerCase()
-  return (
-    client.box_number.toLowerCase().includes(searchLower) ||
-    client.contract_no.toLowerCase().includes(searchLower) ||
-    client.principal_key_holder.toLowerCase().includes(searchLower) ||
-    client.telephone_cell.includes(search) ||
-    client.principal_key_holder_email_address.toLowerCase().includes(searchLower)
-  )
-}
-
-/**
- * Sorts clients based on field and order
- */
-function sortClients(a: any, b: any, sortBy: string, sortOrder: string): number {
-  let aValue: any, bValue: any
-  
-  switch (sortBy) {
-    case 'name':
-      aValue = a.principal_key_holder
-      bValue = b.principal_key_holder
-      break
-    case 'phone':
-      aValue = a.telephone_cell
-      bValue = b.telephone_cell
-      break
-    case 'contract':
-      aValue = a.contract_no
-      bValue = b.contract_no
-      break
-    case 'box_number':
-      aValue = a.box_number
-      bValue = b.box_number
-      break
-    default:
-      aValue = a.created_at
-      bValue = b.created_at
-  }
-
-  const comparison = aValue < bValue ? -1 : aValue > bValue ? 1 : 0
-  return sortOrder === 'asc' ? comparison : -comparison
-}
-
-/**
- * Sanitizes client data for response (removes sensitive fields)
- */
-function sanitizeClientData(client: any): any {
-  const sanitized = { ...client }
-  
-  // Remove any internal fields that shouldn't be exposed
-  delete sanitized.internal_notes
-  delete sanitized.admin_flags
-  
-  // Ensure email is properly formatted
-  if (sanitized.principal_key_holder_email_address) {
-    sanitized.principal_key_holder_email_address = sanitized.principal_key_holder_email_address.toLowerCase()
-  }
-  
-  return sanitized
 }

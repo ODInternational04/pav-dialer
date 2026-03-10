@@ -50,8 +50,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Sanitize input
-    const sanitizedBody = sanitizeObject(body)
+    // Sanitize input (but NOT the password - it will be hashed)
+    const sanitizedBody = sanitizeObject(body, ['password'])
     
     // Validate input with Zod schema
     const validation = validateInput(loginValidationSchema, sanitizedBody)
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
       // Find user by email
       const { data: user, error: userError } = await supabase
         .from('users')
-        .select('id, email, password_hash, first_name, last_name, role, is_active, last_login, created_at, can_access_vault_clients, can_access_gold_clients')
+        .select('id, email, password_hash, first_name, last_name, role, is_active, last_login, created_at')
         .eq('email', email.toLowerCase())
         .single()
 
@@ -165,8 +165,6 @@ export async function POST(request: NextRequest) {
         last_name: user.last_name,
         role: user.role,
         is_active: user.is_active,
-        can_access_vault_clients: user.can_access_vault_clients ?? true,
-        can_access_gold_clients: user.can_access_gold_clients ?? false,
         last_login: loginTime,
         created_at: user.created_at,
         updated_at: loginTime
@@ -177,6 +175,24 @@ export async function POST(request: NextRequest) {
 
       // Log successful authentication
       await logAuthAttempt(email, clientIp, 'SUCCESS', 'Login successful')
+
+      // Write to audit_logs table
+      try {
+        const validIp = /^[\d.:\[\]a-fA-F]+$/.test(clientIp) ? clientIp : null
+        await supabase.from('audit_logs').insert({
+          table_name: 'users',
+          operation: 'LOGIN',
+          user_id: user.id,
+          user_email: user.email,
+          user_role: user.role,
+          record_id: user.id,
+          new_data: { event: 'LOGIN', email: user.email, timestamp: new Date().toISOString() },
+          ip_address: validIp,
+          user_agent: request.headers.get('user-agent') || null
+        })
+      } catch (auditErr) {
+        console.error('Audit log insert failed:', auditErr)
+      }
 
       const responseTime = Date.now() - startTime
       

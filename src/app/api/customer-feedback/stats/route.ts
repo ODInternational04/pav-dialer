@@ -53,9 +53,8 @@ export async function GET(request: NextRequest) {
         *,
         clients (
           id,
-          box_number,
-          principal_key_holder,
-          telephone_cell
+          name,
+          phone
         ),
         users!customer_feedback_user_id_fkey (
           id,

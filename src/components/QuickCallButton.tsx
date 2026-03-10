@@ -42,7 +42,7 @@ export default function QuickCallButton({
       }
 
       // Show success
-      alert(`Call logged successfully for ${client.principal_key_holder}`)
+      alert(`Call logged successfully for ${client.name}`)
     } catch (error) {
       console.error('Error saving call log:', error)
       alert('Failed to save call log. Please try again.')

@@ -40,17 +40,12 @@ interface ClientsResponse {
 }
 
 type CallStatusFilter = 'all' | 'called' | 'not_called'
-type ClientTypeFilter = 'all' | 'vault' | 'gold'
-type SortField = 'created_at' | 'name' | 'phone' | 'contract' | 'box_number' | 'last_call'
+type SortField = 'created_at' | 'name' | 'phone' | 'email' | 'last_call'
 type SortOrder = 'asc' | 'desc'
 
 export default function ClientsPage() {
   const { isAdmin, user } = useAuth()
   const { refreshTrigger } = useRealTime()
-  
-  // Determine user's client access permissions
-  const canAccessVault = user?.can_access_vault_clients ?? true
-  const canAccessGold = user?.can_access_gold_clients ?? false
   
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
@@ -61,7 +56,6 @@ export default function ClientsPage() {
   const [totalPages, setTotalPages] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const [callStatusFilter, setCallStatusFilter] = useState<CallStatusFilter>('all')
-  const [clientTypeFilter, setClientTypeFilter] = useState<ClientTypeFilter>('all')
   const [sortField, setSortField] = useState<SortField>('created_at')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -94,22 +88,6 @@ export default function ClientsPage() {
     return () => clearTimeout(timer)
   }, [searchInput])
 
-  // Set initial client type filter based on user permissions
-  useEffect(() => {
-    if (user) {
-      if (canAccessVault && canAccessGold) {
-        // User can access both, keep 'all'
-        setClientTypeFilter('all')
-      } else if (canAccessVault) {
-        // User can only access vault clients
-        setClientTypeFilter('vault')
-      } else if (canAccessGold) {
-        // User can only access gold clients
-        setClientTypeFilter('gold')
-      }
-    }
-  }, [user, canAccessVault, canAccessGold])
-
   // Restore focus to search input after search operations
   useEffect(() => {
     if (!searchLoading && searchInputRef.current && document.activeElement !== searchInputRef.current) {
@@ -139,7 +117,6 @@ export default function ClientsPage() {
         page: currentPage.toString(),
         limit: limit.toString(),
         callStatus: callStatusFilter,
-        clientType: clientTypeFilter,
         sortBy: sortField,
         sortOrder: sortOrder,
         ...(search && { search }),
@@ -163,7 +140,7 @@ export default function ClientsPage() {
       setLoading(false)
       setSearchLoading(false)
     }
-  }, [currentPage, search, callStatusFilter, clientTypeFilter, sortField, sortOrder])
+  }, [currentPage, search, callStatusFilter, sortField, sortOrder])
 
   const fetchClientCallLogs = async (clientId: string) => {
     try {
@@ -211,7 +188,7 @@ export default function ClientsPage() {
         setSelectedClient(client)
         setAutoStartTimer(true)
         setShowCallModal(true)
-        console.log('Call log modal opened for active call to:', client.principal_key_holder)
+        console.log('Call log modal opened for active call to:', client.name)
       }
     } catch (error) {
       console.error('Error updating call status:', error)
@@ -239,7 +216,7 @@ export default function ClientsPage() {
         setSelectedClient(client)
         setAutoStartTimer(false)
         setShowCallModal(true)
-        console.log('Call log modal opened after call ended for:', client.principal_key_holder)
+        console.log('Call log modal opened after call ended for:', client.name)
       } else if (callEndedManually) {
         console.log('Call was ended manually - not auto-opening modal again')
         setTimeout(() => {
@@ -265,9 +242,9 @@ export default function ClientsPage() {
 
   const handleCallbackWorkflow = useCallback(async (client: Client, notificationId: string) => {
     try {
-      console.log('🚨 Starting callback workflow for:', client.principal_key_holder)
+      console.log('🚨 Starting callback workflow for:', client.name)
       
-      alert(`🚨 CALLBACK DUE NOW!\n\nProcessing callback for:\n${client.principal_key_holder}\n${client.telephone_cell}\n\n3CX will open automatically.`)
+      alert(`🚨 CALLBACK DUE NOW!\n\nProcessing callback for:\n${client.name}\n${client.phone}\n\n3CX will open automatically.`)
       
       const token = localStorage.getItem('token')
       const callbackResponse = await fetch('/api/notifications/callback-action', {
@@ -291,7 +268,7 @@ export default function ClientsPage() {
       
       const callSession = threeCXService.initiateCall(
         client.id, 
-        client.telephone_cell, 
+        client.phone, 
         {
           isCallback: true,
           notificationId: notificationId,
@@ -500,7 +477,7 @@ export default function ClientsPage() {
   }
 
   const handleDelete = async (client: Client) => {
-    if (!confirm(`Are you sure you want to delete ${client.principal_key_holder}?`)) {
+    if (!confirm(`Are you sure you want to delete ${client.name}?`)) {
       return
     }
 
@@ -529,7 +506,6 @@ export default function ClientsPage() {
     setSearchInput('')
     setSearch('')
     setCallStatusFilter('all')
-    setClientTypeFilter('all')
     setSortField('created_at')
     setSortOrder('desc')
     setCurrentPage(1)
@@ -641,49 +617,6 @@ export default function ClientsPage() {
         )}
 
         {/* Filter Statistics Cards */}
-        
-        {/* Client Type Tabs */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-1 mb-4">
-          <div className="flex space-x-2">
-            {canAccessVault && canAccessGold && (
-              <button
-                onClick={() => { setClientTypeFilter('all'); setCurrentPage(1) }}
-                className={`flex-1 py-2 px-4 rounded-md font-medium transition-all ${
-                  clientTypeFilter === 'all'
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                All Clients
-              </button>
-            )}
-            {canAccessVault && (
-              <button
-                onClick={() => { setClientTypeFilter('vault'); setCurrentPage(1) }}
-                className={`flex-1 py-2 px-4 rounded-md font-medium transition-all ${
-                  clientTypeFilter === 'vault'
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                🔒 Vault Clients
-              </button>
-            )}
-            {canAccessGold && (
-              <button
-                onClick={() => { setClientTypeFilter('gold'); setCurrentPage(1) }}
-                className={`flex-1 py-2 px-4 rounded-md font-medium transition-all ${
-                  clientTypeFilter === 'gold'
-                    ? 'bg-yellow-600 text-white shadow-sm'
-                    : 'text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                ⭐ Gold Clients
-              </button>
-            )}
-          </div>
-        </div>
-
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className={`card p-4 cursor-pointer border-2 transition-all ${
             callStatusFilter === 'all' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
@@ -783,8 +716,7 @@ export default function ClientsPage() {
                   <option value="created_at">Date Added</option>
                   <option value="name">Client Name</option>
                   <option value="phone">Phone Number</option>
-                  <option value="contract">Contract Number</option>
-                  <option value="box_number">Box Number</option>
+                  <option value="email">Email</option>
                   <option value="last_call">Last Call Date</option>
                 </select>
               </div>
@@ -818,7 +750,7 @@ export default function ClientsPage() {
               <input
                 ref={searchInputRef}
                 type="text"
-                placeholder="Search by box number, contract, name, phone, or email..."
+                placeholder="Search by name, phone, or email..."
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 className="input pl-10 pr-10"
@@ -882,17 +814,15 @@ export default function ClientsPage() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="table-header">
-                    <SortButton field="box_number">Box Number</SortButton>
+                    <SortButton field="name">Name</SortButton>
                   </th>
                   <th className="table-header">
-                    <SortButton field="name">Name</SortButton>
+                    <SortButton field="email">Email</SortButton>
                   </th>
                   <th className="table-header">
                     <SortButton field="phone">Phone</SortButton>
                   </th>
-                  <th className="table-header">
-                    <SortButton field="contract">Contract</SortButton>
-                  </th>
+                  <th className="table-header">Notes</th>
                   <th className="table-header">Call Status</th>
                   <th className="table-header">Actions</th>
                 </tr>
@@ -906,13 +836,8 @@ export default function ClientsPage() {
                   >
                     <td className="table-cell">
                       <div className="flex items-center space-x-2">
-                        <div>
-                          <div className="font-medium text-gray-900">
-                            {client.box_number}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            Size: {client.size}
-                          </div>
+                        <div className="font-medium text-gray-900">
+                          {client.name}
                         </div>
                         {!client.has_been_called && (
                           <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
@@ -922,30 +847,22 @@ export default function ClientsPage() {
                       </div>
                     </td>
                     <td className="table-cell">
-                      <div className="font-medium text-gray-900">
-                        {client.principal_key_holder}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {client.occupation}
+                      <div className="text-gray-900">
+                        {client.email || <span className="text-gray-400 italic">No email</span>}
                       </div>
                     </td>
                     <td className="table-cell">
                       <div className="font-medium text-gray-900">
-                        {client.telephone_cell}
+                        {client.phone}
                       </div>
-                      {client.telephone_home && (
-                        <div className="text-sm text-gray-500">
-                          Home: {client.telephone_home}
-                        </div>
-                      )}
                     </td>
                     <td className="table-cell">
-                      <div className="font-medium text-gray-900">
-                        {client.contract_no}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {new Date(client.contract_start_date).toLocaleDateString()} - 
-                        {new Date(client.contract_end_date).toLocaleDateString()}
+                      <div className="text-sm text-gray-600 max-w-xs truncate" title={client.notes || ''}>
+                        {client.notes ? (
+                          client.notes.length > 50 ? `${client.notes.substring(0, 50)}...` : client.notes
+                        ) : (
+                          <span className="text-gray-400 italic">No notes</span>
+                        )}
                       </div>
                     </td>
                     <td className="table-cell">
@@ -1117,9 +1034,9 @@ export default function ClientsPage() {
                 <div>
                   <h2 className="text-xl font-bold text-gray-900">Call History</h2>
                   <div className="mt-2 text-sm text-gray-600">
-                    <p className="font-medium">{selectedClient.principal_key_holder}</p>
-                    <p>{selectedClient.telephone_cell}</p>
-                    <p>Box: {selectedClient.box_number} | Contract: {selectedClient.contract_no}</p>
+                    <p className="font-medium">{selectedClient.name}</p>
+                    <p>{selectedClient.phone}</p>
+                    <p>{selectedClient.email || 'No email'}</p>
                   </div>
                 </div>
                 <button

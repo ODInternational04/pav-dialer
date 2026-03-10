@@ -4,8 +4,8 @@ import { RealTimeProvider } from '@/contexts/RealTimeContext'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'IBV Dialer',
-  description: 'IBV Dialer – Professional dialer system for client management and call tracking',
+  title: 'Pavilion Hotel Dialer Tracking',
+  description: 'Pavilion Hotel Dialer Tracking – Professional call management and client tracking system',
 }
 
 export default function RootLayout({

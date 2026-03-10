@@ -1,6 +1,6 @@
-# Dialer System
+# Pavilion Hotel Dialer Tracking
 
-A comprehensive dialer system built with Next.js, TypeScript, Tailwind CSS, and Supabase for managing client information, call tracking, and user management.
+A professional call management and client tracking system built for Pavilion Hotel using Next.js, TypeScript, Tailwind CSS, and Supabase for managing client information, call tracking, and user management.
 
 ## Features
 

@@ -13,6 +13,7 @@ const rateLimitMap = new Map<string, { count: number; resetTime: number; firstRe
 const RATE_LIMITS = {
   '/api/auth/login': { requests: 5, windowMs: 5 * 60 * 1000 }, // 5 requests per 5 minutes
   '/api/auth/register': { requests: 3, windowMs: 10 * 60 * 1000 }, // 3 requests per 10 minutes
+  '/api/auth/verify': { requests: 100, windowMs: 60 * 1000 }, // 100 requests per minute for token verification (frequent on page refresh)
   '/api/auth/': { requests: 10, windowMs: 60 * 1000 }, // 10 requests per minute for other auth
   '/api/': { requests: 100, windowMs: 60 * 1000 }, // 100 requests per minute for general API
   default: { requests: 200, windowMs: 60 * 1000 } // 200 requests per minute for everything else

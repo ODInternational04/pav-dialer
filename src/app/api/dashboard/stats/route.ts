@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { verifyToken, extractTokenFromHeader } from '@/lib/auth'
+import { serverCache } from '@/lib/cache'
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,6 +26,16 @@ export async function GET(request: NextRequest) {
     // Note: using decoded.role and decoded.userId directly for consistency with call-logs API
     const isAdmin = decoded.role === 'admin'
     const userId = decoded.userId
+
+    // Try to get cached stats (15 second cache)
+    const cacheKey = `stats:${userId}:${isAdmin}`
+    const cached = serverCache.get(cacheKey)
+    if (cached) {
+      const response = NextResponse.json(cached)
+      response.headers.set('X-Cache', 'HIT')
+      response.headers.set('Cache-Control', 'private, s-maxage=15, stale-while-revalidate=30')
+      return response
+    }
 
     // Get total clients
     const { count: totalClients } = await supabase
@@ -165,7 +176,14 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json(stats)
+    // Cache the stats for 15 seconds
+    serverCache.set(cacheKey, stats, 15)
+
+    const response = NextResponse.json(stats)
+    response.headers.set('X-Cache', 'MISS')
+    response.headers.set('Cache-Control', 'private, s-maxage=15, stale-while-revalidate=30')
+    
+    return response
   } catch (error) {
     console.error('Error fetching dashboard stats:', error)
     return NextResponse.json(

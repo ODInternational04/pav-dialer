@@ -657,14 +657,14 @@ export default function CustomerFeedbackPage() {
                                     className="text-blue-600 hover:text-blue-900 hover:underline"
                                     title="View feedback history for this client"
                                   >
-                                    {item.clients?.principal_key_holder}
+                                    {item.clients?.name}
                                   </button>
                                 ) : (
-                                  item.clients?.principal_key_holder
+                                  item.clients?.name
                                 )}
                               </div>
                               <div className="text-sm text-gray-500">
-                                Box #{item.clients?.box_number}
+                                {item.clients?.phone}
                               </div>
                             </div>
                           </td>
@@ -806,9 +806,9 @@ export default function CustomerFeedbackPage() {
                 <div>
                   <h3 className="text-sm font-medium text-gray-900 mb-2">Client Information</h3>
                   <div className="bg-gray-50 p-3 rounded-lg">
-                    <p className="text-sm"><strong>Name:</strong> {selectedFeedback.clients?.principal_key_holder}</p>
-                    <p className="text-sm"><strong>Box Number:</strong> {selectedFeedback.clients?.box_number}</p>
-                    <p className="text-sm"><strong>Phone:</strong> {selectedFeedback.clients?.telephone_cell}</p>
+                    <p className="text-sm"><strong>Name:</strong> {selectedFeedback.clients?.name}</p>
+                    <p className="text-sm"><strong>Email:</strong> {selectedFeedback.clients?.email || 'No email'}</p>
+                    <p className="text-sm"><strong>Phone:</strong> {selectedFeedback.clients?.phone}</p>
                   </div>
                 </div>
 
@@ -891,13 +891,13 @@ export default function CustomerFeedbackPage() {
                     <h2 className="text-xl font-bold text-gray-900">Feedback History</h2>
                     <div className="mt-2">
                       <p className="text-sm text-gray-600">
-                        <strong>Client:</strong> {selectedClient.principal_key_holder}
+                        <strong>Client:</strong> {selectedClient.name}
                       </p>
                       <p className="text-sm text-gray-600">
-                        <strong>Box Number:</strong> {selectedClient.box_number}
+                        <strong>Email:</strong> {selectedClient.email || 'No email'}
                       </p>
                       <p className="text-sm text-gray-600">
-                        <strong>Phone:</strong> {selectedClient.telephone_cell}
+                        <strong>Phone:</strong> {selectedClient.phone}
                       </p>
                     </div>
                   </div>

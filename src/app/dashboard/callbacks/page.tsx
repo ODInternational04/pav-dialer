@@ -3,15 +3,18 @@
 import React, { useState, useEffect } from 'react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { useAuth } from '@/contexts/AuthContext'
-import { UserIcon, CalendarIcon, ClockIcon, PhoneIcon, CheckCircleIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
+import CallLogModal from '@/components/modals/CallLogModal'
+import ThreeCXCallButton from '@/components/ThreeCXCallButton'
+import { Client as ClientType, CreateCallLogRequest } from '@/types'
+import { threeCXService } from '@/lib/3cx'
+import { UserIcon, CalendarIcon, ClockIcon, PhoneIcon, CheckCircleIcon, ExclamationTriangleIcon, PhoneArrowUpRightIcon } from '@heroicons/react/24/outline'
 
 interface Client {
   id: string
-  box_number: string
-  principal_key_holder: string
-  telephone_cell?: string
-  telephone_home?: string
-  principal_key_holder_email_address?: string
+  name: string
+  phone: string
+  email?: string
+  notes?: string
 }
 
 interface CallLog {
@@ -70,6 +73,16 @@ export default function CallbacksPage() {
     totalPages: 0
   })
   const [currentPage, setCurrentPage] = useState(1)
+  const [showCallModal, setShowCallModal] = useState(false)
+  const [selectedClient, setSelectedClient] = useState<ClientType | null>(null)
+  const [callbackContext, setCallbackContext] = useState<{ priority: string, notificationId: string } | null>(null)
+  const [showReschedulePrompt, setShowReschedulePrompt] = useState(false)
+  const [failedCallData, setFailedCallData] = useState<{ status: string; notificationId: string; clientData?: ClientType } | null>(null)
+
+  // Debug state changes
+  useEffect(() => {
+    console.log('🎭 State update - showReschedulePrompt:', showReschedulePrompt, 'failedCallData:', failedCallData)
+  }, [showReschedulePrompt, failedCallData])
 
   const fetchCallbacks = React.useCallback(async () => {
     const token = localStorage.getItem('token')
@@ -153,6 +166,192 @@ export default function CallbacksPage() {
     } catch (err) {
       console.error('Error marking notification as read:', err)
     }
+  }
+
+  const handleCallCallback = (notification: Notification) => {
+    if (!notification.clients) return
+
+    // Determine callback priority based on scheduled time
+    const now = new Date()
+    const scheduled = new Date(notification.scheduled_for)
+    const isPastDue = scheduled < now
+    const priority = isPastDue ? 'overdue' : 'pending'
+
+    // Store callback context for CallLogModal
+    const context = {
+      priority,
+      notificationId: notification.id,
+      callbackTime: notification.scheduled_for
+    }
+    localStorage.setItem('current_callback_context', JSON.stringify(context))
+    setCallbackContext({ priority, notificationId: notification.id })
+
+    // Convert to ClientType format for modal
+    const clientData: ClientType = {
+      id: notification.clients.id,
+      name: notification.clients.name,
+      phone: notification.clients.phone,
+      email: notification.clients.email || null,
+      notes: notification.clients.notes || '',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      created_by: user?.id || '',
+      last_updated_by: user?.id || '',
+    }
+
+    // Automatically initiate the call
+    try {
+      threeCXService.initiateCall(clientData.id, clientData.phone)
+      console.log('Call initiated for callback:', clientData.phone)
+    } catch (error) {
+      console.error('Failed to initiate call:', error)
+    }
+
+    setSelectedClient(clientData)
+    setShowCallModal(true)
+  }
+
+  const handleSaveCallLog = async (callLog: CreateCallLogRequest) => {
+    console.log('💾 Saving call log from callback:', callLog)
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch('/api/call-logs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(callLog),
+      })
+
+      if (response.ok) {
+        const callStatus = callLog.call_status?.toLowerCase()
+        console.log('📊 Call status received:', callStatus)
+        console.log('🔔 Callback context:', callbackContext)
+        
+        // Clear callback context
+        localStorage.removeItem('current_callback_context')
+        
+        // Only mark as complete if call was successful
+        if (callStatus === 'completed') {
+          console.log('✅ Call completed - marking callback as done')
+          // Mark notification as read - callback completed successfully
+          if (callbackContext) {
+            await markAsRead(callbackContext.notificationId)
+          }
+          setCallbackContext(null)
+          setShowCallModal(false)
+          setSelectedClient(null)
+        } else if (callStatus === 'busy' || callStatus === 'missed' || callStatus === 'declined') {
+          console.log('⚠️ Call unsuccessful - showing reschedule prompt')
+          // Call unsuccessful - prompt for rescheduling
+          setFailedCallData({
+            status: callStatus,
+            notificationId: callbackContext?.notificationId || '',
+            clientData: selectedClient || undefined
+          })
+          setShowCallModal(false)
+          setShowReschedulePrompt(true)
+          console.log('📋 Failed call data set:', {
+            status: callStatus,
+            notificationId: callbackContext?.notificationId,
+            hasClientData: !!selectedClient
+          })
+        } else {
+          console.log('❓ Unknown status - completing normally:', callStatus)
+          // Unknown status - complete normally
+          if (callbackContext) {
+            await markAsRead(callbackContext.notificationId)
+          }
+          setCallbackContext(null)
+          setShowCallModal(false)
+          setSelectedClient(null)
+        }
+        
+        // Refresh callbacks list
+        await fetchCallbacks()
+      } else {
+        const error = await response.json()
+        alert(error.details || error.error || 'Failed to save call log')
+      }
+    } catch (error) {
+      console.error('Error saving call log:', error)
+      alert('Error saving call log')
+    }
+  }
+
+  const handleCloseCallModal = () => {
+    // Clear callback context
+    localStorage.removeItem('current_callback_context')
+    setCallbackContext(null)
+    setShowCallModal(false)
+    setSelectedClient(null)
+  }
+
+  const handleRescheduleCallback = () => {
+    console.log('Reschedule clicked, failedCallData:', failedCallData)
+    console.log('Available notifications:', notifications.length)
+    
+    // Close reschedule prompt
+    setShowReschedulePrompt(false)
+    
+    // Try to get client data from failedCallData first (more reliable)
+    let clientData = failedCallData?.clientData
+    
+    // If not available, try to find from notifications (fallback)
+    if (!clientData) {
+      const notification = notifications.find(n => n.id === failedCallData?.notificationId)
+      console.log('Found notification:', notification)
+      
+      if (notification && notification.clients) {
+        clientData = {
+          id: notification.clients.id,
+          name: notification.clients.name,
+          phone: notification.clients.phone,
+          email: notification.clients.email || null,
+          notes: notification.clients.notes || '',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          created_by: user?.id || '',
+          last_updated_by: user?.id || '',
+        }
+      }
+    }
+    
+    console.log('Client data for reschedule:', clientData)
+    
+    if (clientData && failedCallData?.notificationId) {
+      // Set context without initiating call
+      const context = {
+        priority: 'normal',
+        notificationId: failedCallData.notificationId,
+        callbackTime: new Date().toISOString()
+      }
+      
+      localStorage.setItem('current_callback_context', JSON.stringify(context))
+      setCallbackContext({ priority: 'normal', notificationId: failedCallData.notificationId })
+      setSelectedClient(clientData)
+      setShowCallModal(true)
+      console.log('Modal state set - should open now')
+    } else {
+      console.error('Unable to find client data for rescheduling')
+      alert('Unable to reschedule: callback data not found. Please refresh the page and try again.')
+    }
+    
+    setFailedCallData(null)
+  }
+
+  const handleDismissCallback = async () => {
+    // Mark the callback as read (dismissed)
+    if (failedCallData?.notificationId) {
+      await markAsRead(failedCallData.notificationId)
+      await fetchCallbacks()
+    }
+    
+    setShowReschedulePrompt(false)
+    setFailedCallData(null)
+    setCallbackContext(null)
+    setSelectedClient(null)
   }
 
   const formatDateTime = (dateString: string) => {
@@ -283,26 +482,30 @@ export default function CallbacksPage() {
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                             <div>
                               <span className="font-medium text-gray-700">Name:</span>
-                              <span className="ml-2 text-gray-900">{client.principal_key_holder}</span>
+                              <span className="ml-2 text-gray-900">{client.name}</span>
                             </div>
-                            <div>
-                              <span className="font-medium text-gray-700">Box Number:</span>
-                              <span className="ml-2 text-gray-900">{client.box_number}</span>
+                            <div className="flex items-center gap-2">
+                              <PhoneIcon className="h-4 w-4 text-gray-600" />
+                              <span className="font-medium text-gray-700">Phone:</span>
+                              <span className="text-gray-900">{client.phone}</span>
                             </div>
-                            {client.telephone_cell && (
-                              <div className="flex items-center gap-2">
-                                <PhoneIcon className="h-4 w-4 text-gray-600" />
-                                <span className="font-medium text-gray-700">Cell:</span>
-                                <span className="text-gray-900">{client.telephone_cell}</span>
+                            {client.email && (
+                              <div className="md:col-span-2">
+                                <span className="font-medium text-gray-700">Email:</span>
+                                <span className="ml-2 text-gray-900">{client.email}</span>
                               </div>
                             )}
-                            {client.telephone_home && (
-                              <div className="flex items-center gap-2">
-                                <PhoneIcon className="h-4 w-4 text-gray-600" />
-                                <span className="font-medium text-gray-700">Home:</span>
-                                <span className="text-gray-900">{client.telephone_home}</span>
-                              </div>
-                            )}
+                          </div>
+                          
+                          {/* Call Action Button */}
+                          <div className="mt-4 pt-4 border-t border-gray-200">
+                            <button
+                              onClick={() => handleCallCallback(notification)}
+                              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium"
+                            >
+                              <PhoneArrowUpRightIcon className="h-5 w-5" />
+                              <span>Call Client (Callback)</span>
+                            </button>
                           </div>
                         </div>
                       )}
@@ -366,6 +569,62 @@ export default function CallbacksPage() {
           </div>
         )}
       </div>
+
+      {/* Call Log Modal for Callback Calls */}
+      {showCallModal && selectedClient && (
+        <CallLogModal
+          isOpen={showCallModal}
+          onClose={handleCloseCallModal}
+          client={selectedClient}
+          onSave={handleSaveCallLog}
+        />
+      )}
+
+      {/* Reschedule Prompt Modal */}
+      {showReschedulePrompt && failedCallData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-3 bg-warning-100 rounded-full">
+                <ExclamationTriangleIcon className="h-6 w-6 text-warning-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Call Unsuccessful</h3>
+                <p className="text-sm text-gray-600">
+                  Call status: <span className="font-medium capitalize">{failedCallData.status}</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+              <p className="text-sm text-gray-700 leading-relaxed">
+                The callback attempt was logged as <strong>{failedCallData.status}</strong>. 
+                Would you like to reschedule this callback for another time, or mark it as complete?
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleRescheduleCallback}
+                className="flex-1 px-4 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium flex items-center justify-center gap-2"
+              >
+                <CalendarIcon className="h-5 w-5" />
+                Reschedule Callback
+              </button>
+              <button
+                onClick={handleDismissCallback}
+                className="flex-1 px-4 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+              >
+                Mark Complete
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-500 mt-3 text-center">
+              The call log has been saved with the call status
+            </p>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   )
 }

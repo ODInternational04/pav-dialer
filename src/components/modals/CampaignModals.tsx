@@ -717,9 +717,8 @@ export function ImportClientsModal({
             <p className="text-sm font-medium text-blue-900 mb-2">📋 CSV Format Requirements:</p>
             <ul className="text-xs text-blue-700 space-y-1 list-disc list-inside">
               <li>First row must contain column headers</li>
-              <li>Required fields: box_number, size, contract_no, principal_key_holder, id_number, email, cell, start_date, end_date, occupation</li>
-              <li>Optional fields: telephone_home, gender, notes</li>
-              <li>Dates must be in YYYY-MM-DD format</li>
+              <li>Required fields: name, phone</li>
+              <li>Optional fields: email, notes</li>
               <li>Download the template for correct formatting</li>
             </ul>
           </div>

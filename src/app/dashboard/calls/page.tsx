@@ -36,10 +36,8 @@ interface CallLog {
   }
   clients: {
     id: string
-    box_number: string
-    principal_key_holder: string
-    telephone_cell: string
-    telephone_home?: string
+    name: string
+    phone: string
     email?: string
   }
 }
@@ -422,9 +420,9 @@ export default function CallLogsPage() {
                             <div className="flex items-center">
                               <BuildingOfficeIcon className="w-4 h-4 text-gray-400 mr-2" />
                               <div>
-                                <div className="font-medium text-gray-900">{log.clients.principal_key_holder}</div>
+                                <div className="font-medium text-gray-900">{log.clients.name}</div>
                                 <div className="text-sm text-gray-500">
-                                  Box: {log.clients.box_number} • {log.clients.telephone_cell}
+                                  {log.clients.phone}
                                 </div>
                               </div>
                             </div>
@@ -483,8 +481,8 @@ export default function CallLogsPage() {
                     <div key={log.id} className="p-4">
                       <div className="flex items-start justify-between mb-3">
                         <div>
-                          <h3 className="font-medium text-gray-900">{log.clients.principal_key_holder}</h3>
-                          <p className="text-sm text-gray-500">Box: {log.clients.box_number}</p>
+                          <h3 className="font-medium text-gray-900">{log.clients.name}</h3>
+                          <p className="text-sm text-gray-500">{log.clients.phone}{log.clients.email ? ' • ' + log.clients.email : ''}</p>
                         </div>
                         <div className="text-right">
                           <div className="text-sm font-medium text-gray-900">{date}</div>

@@ -86,11 +86,11 @@ export async function POST(request: NextRequest) {
       const clientData = importResult.validRows[i]
 
       try {
-        // Check for existing client by box_number or contract_no
+        // Check for existing client by phone number
         const { data: existingClient } = await supabase
           .from('clients')
           .select('id, custom_fields')
-          .or(`box_number.eq.${clientData.box_number},contract_no.eq.${clientData.contract_no}`)
+          .eq('phone', clientData.phone)
           .single()
 
         if (existingClient) {
@@ -104,7 +104,6 @@ export async function POST(request: NextRequest) {
             .update({
               campaign_id: campaignId,
               assigned_to: assignToUser || null,
-              gender: clientData.gender || null,
               custom_fields: mergedCustomFields,
               last_updated_by: payload.userId,
               updated_at: new Date().toISOString(),

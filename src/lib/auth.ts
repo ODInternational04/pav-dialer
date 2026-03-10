@@ -8,8 +8,6 @@ export interface TokenPayload {
   userId: string
   email: string
   role: 'admin' | 'user'
-  can_access_vault_clients?: boolean
-  can_access_gold_clients?: boolean
   iat?: number
   exp?: number
   tokenVersion?: number
@@ -81,8 +79,6 @@ export const generateToken = (user: Omit<User, 'password'>, sessionId?: string):
     userId: user.id,
     email: user.email,
     role: user.role,
-    can_access_vault_clients: user.can_access_vault_clients ?? true,
-    can_access_gold_clients: user.can_access_gold_clients ?? false,
     iat: Math.floor(Date.now() / 1000),
     tokenVersion: 1, // For token revocation capability
     sessionId: sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`

@@ -6,8 +6,6 @@ export interface User {
   last_name: string
   role: 'admin' | 'user'
   is_active: boolean
-  can_access_vault_clients: boolean
-  can_access_gold_clients: boolean
   created_at: string
   updated_at: string
   last_login?: string
@@ -15,46 +13,19 @@ export interface User {
 
 export interface Client {
   id: string
-  client_type: 'vault' | 'gold'
-  box_number: string
-  size: string
-  contract_no: string
-  principal_key_holder: string
-  principal_key_holder_id_number: string
-  principal_key_holder_email_address: string
-  telephone_cell: string
-  telephone_home?: string
-  contract_start_date: string
-  contract_end_date: string
-  occupation: string
+  name: string
+  phone: string
+  email: string | null
   notes: string
   created_at: string
   updated_at: string
   created_by: string
   last_updated_by: string
-  // Campaign and assignment fields
-  campaign_id?: string
-  gender?: 'male' | 'female' | 'other' | 'unknown'
-  assigned_to?: string
-  custom_fields?: Record<string, any>
   // Enhanced fields for call tracking
   total_calls?: number
   last_call_date?: string
   has_been_called?: boolean
-  call_logs?: any[]
-  // Related data from API joins
-  campaigns?: {
-    id: string
-    name: string
-    department: string
-    status: string
-  }
-  assigned_user?: {
-    id: string
-    first_name: string
-    last_name: string
-    email: string
-  }
+  call_logs?: CallLog[]
 }
 
 export interface CallLog {
@@ -65,6 +36,7 @@ export interface CallLog {
   call_status: 'completed' | 'missed' | 'declined' | 'busy' | 'no_answer'
   call_duration?: number // in seconds
   notes: string
+  feedback: string // Customer feedback during call
   callback_requested: boolean
   callback_time?: string
   call_started_at: string
@@ -73,10 +45,9 @@ export interface CallLog {
   // Related data from API joins
   clients?: {
     id: string
-    box_number: string
-    principal_key_holder: string
-    telephone_cell: string
-    contract_no: string
+    name: string
+    phone: string
+    email: string | null
   }
   users?: {
     id: string
@@ -101,14 +72,15 @@ export interface Notification {
   // Related data from API joins
   clients?: {
     id: string
-    box_number: string
-    principal_key_holder: string
-    telephone_cell: string
+    name: string
+    phone: string
+    email: string | null
   }
   call_logs?: {
     id: string
     call_status: string
     notes: string
+    feedback: string
   }
 }
 
@@ -142,25 +114,10 @@ export interface LoginResponse {
 }
 
 export interface CreateClientRequest {
-  client_type: 'vault' | 'gold'
-  // Vault client fields (all fields required for vault)
-  box_number?: string
-  size?: string
-  contract_no?: string
-  principal_key_holder_id_number?: string
-  contract_start_date?: string
-  contract_end_date?: string
-  occupation?: string
-  // Common fields for both types
-  principal_key_holder: string // Name (required for both)
-  telephone_cell: string        // Cell number (required for both)
-  principal_key_holder_email_address: string // Email (required for both)
-  telephone_home?: string
-  notes: string
-  // Additional fields
-  campaign_id?: string
-  gender?: 'male' | 'female' | 'other' | 'unknown'
-  assigned_to?: string
+  name: string
+  phone: string
+  email?: string
+  notes?: string
   custom_fields?: Record<string, any>
 }
 
@@ -190,6 +147,7 @@ export interface CallSummaryReport {
 }
 
 export interface UserPerformanceReport {
+  feedback?: string
   user: Omit<User, 'password'>
   total_calls: number
   completed_calls: number
@@ -219,10 +177,10 @@ export interface CustomerFeedback {
   // Related data from API joins
   clients?: {
     id: string
-    box_number: string
-    principal_key_holder: string
-    telephone_cell: string
-    contract_no: string
+    name: string
+    phone: string
+    email: string
+    notes: string
   }
   users?: {
     id: string

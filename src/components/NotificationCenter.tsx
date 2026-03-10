@@ -18,11 +18,10 @@ interface Notification {
   client_id?: string
   clients?: {
     id: string
-    principal_key_holder: string
-    telephone_cell: string
-    telephone_home?: string
+    name: string
+    phone: string
     email?: string
-    box_number: string
+    notes: string
   }
 }
 
@@ -218,8 +217,8 @@ export default function NotificationCenter() {
           notificationId: notification.id,
           priority: isOverdue ? 'overdue' : 'urgent',
           clientId: notification.clients.id,
-          clientName: notification.clients.principal_key_holder,
-          phoneNumber: notification.clients.telephone_cell
+          clientName: notification.clients.name,
+          phoneNumber: notification.clients.phone
         }))
       }
     }
@@ -508,7 +507,7 @@ export default function NotificationCenter() {
                                 isUrgent ? 'bg-orange-600 hover:bg-orange-700 text-white border-2 border-orange-700' :
                                 'bg-blue-600 hover:bg-blue-700 text-white border-2 border-blue-700'
                               }`}
-                              title={`Call ${notification.clients.principal_key_holder}`}
+                              title={`Call ${notification.clients.name}`}
                             >
                               <PhoneIcon className="w-4 h-4 inline mr-2" />
                               {isOverdue ? (
@@ -531,29 +530,20 @@ export default function NotificationCenter() {
                             <div className="flex items-center space-x-2 mb-2">
                               <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                                 <span className="text-blue-600 font-medium text-sm">
-                                  {notification.clients.principal_key_holder.charAt(0).toUpperCase()}
+                                  {notification.clients.name.charAt(0).toUpperCase()}
                                 </span>
                               </div>
                               <div className="flex-1">
                                 <div className="font-semibold text-gray-900">
-                                  {notification.clients.principal_key_holder}
-                                </div>
-                                <div className="text-gray-600 text-xs">
-                                  Box: {notification.clients.box_number}
+                                  {notification.clients.name}
                                 </div>
                               </div>
                             </div>
                             <div className="space-y-1">
                               <div className="flex items-center space-x-2 text-gray-700">
                                 <PhoneIcon className="w-4 h-4 text-gray-500" />
-                                <span className="font-medium">{notification.clients.telephone_cell}</span>
+                                <span className="font-medium">{notification.clients.phone}</span>
                               </div>
-                              {notification.clients.telephone_home && (
-                                <div className="flex items-center space-x-2 text-gray-600">
-                                  <span className="w-4 h-4 flex items-center justify-center text-gray-400 text-xs">📞</span>
-                                  <span>{notification.clients.telephone_home}</span>
-                                </div>
-                              )}
                               {notification.clients.email && (
                                 <div className="flex items-center space-x-2 text-gray-600">
                                   <span className="w-4 h-4 flex items-center justify-center text-gray-400 text-xs">📧</span>

@@ -104,9 +104,9 @@ export default function CallLogModal({
       setFormData({
         client_id: client.id,
         call_type: 'outbound',
-        call_status: duration > 0 ? 'completed' : 'completed', // Default to completed
+        call_status: 'completed', // Default to completed
         call_duration: duration,
-        notes: activeCall ? '3CX call completed' : '',
+        notes: '', // No pre-fill notes
         callback_requested: false,
         callback_time: '',
       })
@@ -141,44 +141,22 @@ export default function CallLogModal({
             setIsCallbackCall(true)
             setCallbackPriority(context.priority || null)
             
-            // Pre-fill form with callback context
+            // Pre-fill form with callback context (no pre-filled notes)
             setFormData(prev => ({
               ...prev,
-              notes: `🚨 CALLBACK CALL - ${prev.notes || ''}`,
+              notes: prev.notes || '', // Keep existing notes, don't pre-fill
               call_status: 'completed' // Assume it will be completed
             }))
             
-            // Automatically start the call for callback
-            if (context.priority === 'overdue' || context.priority === 'urgent') {
-              console.log('🚨 Starting automatic callback call for:', context.clientName)
-              
-              // Start the call timer
-              setIsCallActive(true)
-              setCallStartTime(new Date())
-              
-              // Import and trigger 3CX call
-              const { threeCXService } = await import('@/lib/3cx')
-              
-              const callSession = threeCXService.initiateCall(
-                context.clientId, 
-                context.phoneNumber, 
-                {
-                  isCallback: true,
-                  notificationId: context.notificationId,
-                  priority: context.priority
-                }
-              )
-              
-              console.log('✅ 3CX call initiated for callback:', context.clientName)
-              
-              // Show success message
-              setTimeout(() => {
-                alert(`� 3CX call started for callback:\n${context.clientName}\n${context.phoneNumber}\n\nTimer started. End call when finished.`)
-              }, 1000)
-            }
+            // Automatically start the call timer for ALL callbacks
+            console.log('🚨 Starting automatic callback call timer')
             
-            // Clear the context after processing
-            localStorage.removeItem('current_callback_context')
+            // Start the call timer
+            setIsCallActive(true)
+            setCallStartTime(new Date())
+            console.log('✅ Call timer started for callback')
+            
+            // Don't clear context here - let it be cleared on save or close
           } else if (autoStartTimer) {
             // Automatically start the call timer for active 3CX calls (non-callback)
             setIsCallActive(true)
@@ -285,10 +263,11 @@ export default function CallLogModal({
   const handleQuickCallback = (hours: number) => {
     const now = new Date()
     const callbackTime = new Date(now.getTime() + (hours * 60 * 60 * 1000))
+    
     setFormData(prev => ({
       ...prev,
       callback_requested: true,
-      callback_time: callbackTime.toISOString()
+      callback_time: callbackTime.toISOString() // Store as UTC ISO string
     }))
   }
 
@@ -344,6 +323,13 @@ export default function CallLogModal({
 
     setIsLoading(true)
     try {
+      // End any active 3CX call session before saving
+      const activeCall = threeCXService.getActiveCallByClient(client.id)
+      if (activeCall) {
+        console.log('Ending active 3CX call for client:', client.id)
+        threeCXService.endCall(activeCall.id)
+      }
+      
       // Save call log first
       await onSave(formData)
       
@@ -527,9 +513,9 @@ export default function CallLogModal({
                 )}
               </div>
               <div className="mt-2 text-sm text-gray-600">
-                <p className="font-medium">{client.principal_key_holder}</p>
-                <p>{client.telephone_cell}</p>
-                <p>Box: {client.box_number} | Contract: {client.contract_no}</p>
+                <p className="font-medium">{client.name}</p>
+                <p>{client.phone}</p>
+                {client.email && <p className="text-gray-500">{client.email}</p>}
                 {isCallbackCall && (
                   <p className={`mt-1 font-medium ${
                     callbackPriority === 'overdue' ? 'text-red-600' : 'text-orange-600'
@@ -731,13 +717,34 @@ export default function CallLogModal({
                   <label className="label">Custom Callback Time</label>
                   <input
                     type="datetime-local"
-                    value={formData.callback_time ? new Date(formData.callback_time).toISOString().slice(0, 16) : ''}
-                    onChange={(e) => setFormData(prev => ({ 
-                      ...prev, 
-                      callback_time: e.target.value ? new Date(e.target.value).toISOString() : ''
-                    }))}
+                    value={formData.callback_time ? (() => {
+                      // Convert UTC time to local datetime-local format
+                      const date = new Date(formData.callback_time)
+                      const offset = date.getTimezoneOffset()
+                      const localDate = new Date(date.getTime() - offset * 60000)
+                      return localDate.toISOString().slice(0, 16)
+                    })() : ''}
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        // Convert local datetime-local to UTC
+                        const localDate = new Date(e.target.value)
+                        const offset = localDate.getTimezoneOffset()
+                        const utcDate = new Date(localDate.getTime() + offset * 60000)
+                        setFormData(prev => ({ 
+                          ...prev, 
+                          callback_time: utcDate.toISOString()
+                        }))
+                      } else {
+                        setFormData(prev => ({ ...prev, callback_time: '' }))
+                      }
+                    }}
                     className={`input ${errors.callback_time ? 'border-danger-500' : ''}`}
-                    min={new Date().toISOString().slice(0, 16)}
+                    min={(() => {
+                      const now = new Date()
+                      const offset = now.getTimezoneOffset()
+                      const localNow = new Date(now.getTime() - offset * 60000)
+                      return localNow.toISOString().slice(0, 16)
+                    })()}
                   />
                   {errors.callback_time && (
                     <p className="text-sm text-danger-600 mt-1">{errors.callback_time}</p>

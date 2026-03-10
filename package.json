@@ -1,12 +1,13 @@
 {
-  "name": "dialer-system",
-  "version": "0.1.0",
+  "name": "pavilion-hotel-dialer-tracking",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "setup:db": "node setup-database.js",
     "test:api": "node test-api.js",
     "test:api:local": "node test-api.js --local",
     "test:api:production": "node test-api.js --production"

@@ -31,6 +31,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
+      // Debug logging (remove in production)
+      console.log('🔐 Login attempt:', { 
+        email,
+        passwordLength: password.length,
+        timestamp: new Date().toISOString()
+      })
+      
       // Clear any existing auth state before attempting login
       setUser(null)
       if (typeof window !== 'undefined') {
@@ -47,6 +54,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         cache: 'no-store', // Prevent caching issues
       })
 
+      console.log('📡 Login response:', response.status, response.statusText)
+
       if (response.ok) {
         const data = await response.json()
         
@@ -56,13 +65,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           localStorage.setItem('user', JSON.stringify(data.user))
         }
         
+        console.log('✅ Login successful:', data.user.email)
+        
         // Set user state after successful storage
         setUser(data.user)
         return true
+      } else {
+        const errorData = await response.json()
+        console.error('❌ Login failed:', errorData)
+        return false
       }
-      return false
     } catch (error) {
-      console.error('Login error:', error)
+      console.error('💥 Login error:', error)
       return false
     }
   }
@@ -109,10 +123,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const userData = localStorage.getItem('user')
 
         if (token && userData) {
+          // Immediately restore user from localStorage for instant UI
+          try {
+            const parsedUser = JSON.parse(userData)
+            setUser(parsedUser)
+          } catch (e) {
+            console.error('Failed to parse stored user data:', e)
+            logout()
+            setIsLoading(false)
+            return
+          }
+
+          // Verify token in background (optional validation)
           const isValid = await verifyToken(token)
           if (!isValid) {
             logout()
           }
+        } else {
+          // No stored auth, clear state
+          setUser(null)
         }
       } catch (error) {
         console.error('Auth initialization error:', error)
@@ -123,6 +152,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
 
     initAuth()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const isAdmin = user?.role === 'admin'
