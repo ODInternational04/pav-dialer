@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { verifyToken, extractTokenFromHeader } from '@/lib/auth'
 import { CreateClientRequest } from '@/types'
 import { serverCache } from '@/lib/cache'
+import { zohoClient } from '@/lib/zoho'
 
 /**
  * GET /api/clients - Retrieve clients with pagination and filtering
@@ -232,6 +233,66 @@ export async function POST(request: NextRequest) {
         { error: 'Failed to create client', details: error.message },
         { status: 500 }
       )
+    }
+
+    // Automatically sync to Zoho Bigin if configured
+    if (process.env.ZOHO_REFRESH_TOKEN && newClient) {
+      try {
+        console.log(`[Zoho] Auto-syncing new client: ${newClient.name}`)
+        
+        // Create contact in Zoho
+        const zohoContact = await zohoClient.createContact({
+          name: newClient.name,
+          phone: newClient.phone,
+          email: newClient.email || null,
+          notes: newClient.notes || ''
+        })
+
+        if (zohoContact?.data?.[0]?.details?.id) {
+          const zohoId = zohoContact.data[0].details.id
+          
+          // Update local client with Zoho ID
+          await supabase
+            .from('clients')
+            .update({
+              zoho_contact_id: zohoId,
+              zoho_synced_at: new Date().toISOString(),
+              zoho_last_sync_status: 'success'
+            })
+            .eq('id', newClient.id)
+
+          // Add note to timeline if there are notes
+          if (newClient.notes) {
+            try {
+              await zohoClient.addNoteToContact(
+                zohoId,
+                'Initial Notes from Dialer System',
+                newClient.notes
+              )
+              console.log(`[Zoho] ✓ Added note to contact timeline`)
+            } catch (noteError: any) {
+              console.error('[Zoho] Failed to add note:', noteError.message)
+            }
+          }
+
+          console.log(`[Zoho] ✓ Client synced to Zoho. Contact ID: ${zohoId}`)
+          
+          // Update the response to include Zoho data
+          newClient.zoho_contact_id = zohoId
+          newClient.zoho_synced_at = new Date().toISOString()
+        }
+      } catch (zohoError: any) {
+        // Log error but don't fail the client creation
+        console.error('[Zoho] Failed to sync client to Zoho:', zohoError.message)
+        
+        // Update sync status as failed
+        await supabase
+          .from('clients')
+          .update({
+            zoho_last_sync_status: 'failed'
+          })
+          .eq('id', newClient.id)
+      }
     }
 
     return NextResponse.json(newClient, { status: 201 })

@@ -4,6 +4,7 @@ import { verifyToken, extractTokenFromHeader } from '@/lib/auth'
 import { CreateCustomerFeedbackRequest, UpdateCustomerFeedbackRequest } from '@/types'
 import { emailService } from '@/lib/emailService'
 import { getAdminUsers, getAdminEmails, getUserById } from '@/lib/adminUtils'
+import { zohoClient } from '@/lib/zoho'
 
 export async function GET(request: NextRequest) {
   try {
@@ -235,7 +236,8 @@ export async function POST(request: NextRequest) {
           id,
           name,
           phone,
-          email
+          email,
+          zoho_contact_id
         ),
         users!customer_feedback_user_id_fkey (
           id,
@@ -268,6 +270,32 @@ export async function POST(request: NextRequest) {
         }
       }, { status: 500 })
     }
+
+    // Sync to Zoho Bigin as a note (non-blocking)
+    Promise.resolve().then(async () => {
+      try {
+        if (!process.env.ZOHO_REFRESH_TOKEN) {
+          console.log('⏭️ Zoho sync skipped: ZOHO_REFRESH_TOKEN not configured')
+          return
+        }
+
+        const zohoContactId = feedback.clients?.zoho_contact_id
+        if (!zohoContactId) {
+          console.log('⏭️ Zoho sync skipped: Client has no Zoho contact ID')
+          return
+        }
+
+        console.log('📝 Syncing customer feedback to Zoho as note...')
+        
+        const noteTitle = `Customer Feedback: ${feedback.feedback_type.toUpperCase()} - ${feedback.priority.toUpperCase()}`
+        const noteContent = `Subject: ${feedback.subject}\n\nFeedback Type: ${feedback.feedback_type}\nPriority: ${feedback.priority}\n\n${feedback.notes}\n\n--- Logged from Dialer System ---`
+        
+        await zohoClient.addNoteToContact(zohoContactId, noteTitle, noteContent)
+        console.log('✅ Customer feedback synced to Zoho as note')
+      } catch (error: any) {
+        console.error('❌ Failed to sync feedback to Zoho:', error.message)
+      }
+    })
 
     // Send email notifications to admins after successful feedback creation
     try {

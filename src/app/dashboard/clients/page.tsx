@@ -69,6 +69,7 @@ export default function ClientsPage() {
   const [forceEnd3CXCall, setForceEnd3CXCall] = useState<Record<string, boolean>>({})
   const [showFilterPanel, setShowFilterPanel] = useState(false)
   const [uploadPreview, setUploadPreview] = useState<{ headers: string[]; rows: string[][]; fileName: string } | null>(null)
+  const [isZohoSyncing, setIsZohoSyncing] = useState(false)
 
   // Ref for search input to maintain focus
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -501,6 +502,44 @@ export default function ClientsPage() {
     }
   }
 
+  const handleZohoSync = async () => {
+    if (!confirm('This will import contacts from Zoho Bigin. Continue?')) {
+      return
+    }
+
+    setIsZohoSyncing(true)
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch('/api/zoho/sync-contacts', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      const result = await response.json()
+      
+      if (response.ok) {
+        const message = `✅ ${result.message}\n\n` +
+          `📊 Details:\n` +
+          `• Processed: ${result.details.processed}\n` +
+          `• Created: ${result.details.created}\n` +
+          `• Updated: ${result.details.updated}\n` +
+          `• Skipped: ${result.details.skipped}`
+        
+        alert(message)
+        fetchClients()
+      } else {
+        alert(`❌ ${result.error || 'Failed to sync with Zoho'}\n${result.message || ''}`)
+      }
+    } catch (error) {
+      console.error('Error syncing with Zoho:', error)
+      alert('❌ Error syncing with Zoho Bigin')
+    } finally {
+      setIsZohoSyncing(false)
+    }
+  }
+
   // Reset filters
   const handleResetFilters = () => {
     setSearchInput('')
@@ -556,6 +595,27 @@ export default function ClientsPage() {
               <ArrowUpTrayIcon className="w-5 h-5 mr-2" />
               Upload Clients
             </button>
+            {isAdmin && (
+              <button
+                onClick={handleZohoSync}
+                disabled={isZohoSyncing}
+                className="btn btn-secondary bg-green-600 hover:bg-green-700 disabled:bg-green-300"
+              >
+                {isZohoSyncing ? (
+                  <>
+                    <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                    Syncing...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Sync Zoho Bigin
+                  </>
+                )}
+              </button>
+            )}
             <QuickCallButton onCallComplete={fetchClients} />
             <button
               onClick={() => {
@@ -842,6 +902,17 @@ export default function ClientsPage() {
                         {!client.has_been_called && (
                           <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
                             New
+                          </span>
+                        )}
+                        {(client as any).zoho_contact_id && (
+                          <span 
+                            className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800"
+                            title="Synced with Zoho Bigin"
+                          >
+                            <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                            Zoho
                           </span>
                         )}
                       </div>

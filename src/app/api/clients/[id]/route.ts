@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { verifyToken, extractTokenFromHeader } from '@/lib/auth'
 import { UpdateClientRequest } from '@/types'
+import { zohoClient } from '@/lib/zoho'
 
 export async function GET(
   request: NextRequest,
@@ -109,6 +110,67 @@ export async function PUT(
       )
     }
 
+    // Automatically sync to Zoho Bigin if configured and contact exists
+    if (process.env.ZOHO_REFRESH_TOKEN && updatedClient) {
+      try {
+        if (updatedClient.zoho_contact_id) {
+          // Update existing Zoho contact
+          console.log(`[Zoho] Auto-syncing updated client: ${updatedClient.name}`)
+          
+          const result = await zohoClient.updateContact(updatedClient.zoho_contact_id, {
+            name: updatedClient.name,
+            phone: updatedClient.phone,
+            email: updatedClient.email || null,
+            notes: updatedClient.notes || ''
+          })
+
+          // Update sync timestamp
+          await supabase
+            .from('clients')
+            .update({
+              zoho_synced_at: new Date().toISOString(),
+              zoho_last_sync_status: 'success'
+            })
+            .eq('id', updatedClient.id)
+
+          console.log(`[Zoho] ✓ Client updated in Zoho. Contact ID: ${updatedClient.zoho_contact_id}`)
+        } else {
+          // Create new Zoho contact if doesn't exist
+          console.log(`[Zoho] Creating new Zoho contact for: ${updatedClient.name}`)
+          
+          const zohoContact = await zohoClient.createContact({
+            name: updatedClient.name,
+            phone: updatedClient.phone,
+            email: updatedClient.email || null,
+            notes: updatedClient.notes || ''
+          })
+
+          if (zohoContact?.data?.[0]?.details?.id) {
+            const zohoId = zohoContact.data[0].details.id
+            
+            await supabase
+              .from('clients')
+              .update({
+                zoho_contact_id: zohoId,
+                zoho_synced_at: new Date().toISOString(),
+                zoho_last_sync_status: 'success'
+              })
+              .eq('id', updatedClient.id)
+
+            console.log(`[Zoho] ✓ Client synced to Zoho. Contact ID: ${zohoId}`)
+            updatedClient.zoho_contact_id = zohoId
+          }
+        }
+      } catch (zohoError: any) {
+        console.error('[Zoho] Failed to sync client to Zoho:', zohoError.message)
+        
+        await supabase
+          .from('clients')
+          .update({ zoho_last_sync_status: 'failed' })
+          .eq('id', updatedClient.id)
+      }
+    }
+
     return NextResponse.json({
       message: 'Client updated successfully',
       client: updatedClient
@@ -146,6 +208,25 @@ export async function DELETE(
     }
 
     const { id: clientId } = await params
+
+    // Get client data to check for Zoho ID
+    const { data: client } = await supabase
+      .from('clients')
+      .select('zoho_contact_id, name')
+      .eq('id', clientId)
+      .single()
+
+    // Delete from Zoho first if it exists there
+    if (process.env.ZOHO_REFRESH_TOKEN && client?.zoho_contact_id) {
+      try {
+        console.log(`[Zoho] Deleting contact from Zoho: ${client.name} (${client.zoho_contact_id})`)
+        await zohoClient.deleteContact(client.zoho_contact_id)
+        console.log(`[Zoho] ✓ Contact deleted from Zoho`)
+      } catch (zohoError: any) {
+        console.error('[Zoho] Failed to delete from Zoho:', zohoError.message)
+        // Continue with local deletion even if Zoho deletion fails
+      }
+    }
 
     const { error } = await supabase
       .from('clients')

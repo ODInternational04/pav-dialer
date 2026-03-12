@@ -37,7 +37,8 @@ export async function GET(request: NextRequest) {
           name,
           phone,
           email,
-          notes
+          notes,
+          zoho_contact_id
         ),
         users:user_id (
           id,
@@ -209,7 +210,8 @@ export async function POST(request: NextRequest) {
           name,
           phone,
           email,
-          notes
+          notes,
+          zoho_contact_id
         ),
         users:user_id (
           id,
@@ -242,9 +244,146 @@ export async function POST(request: NextRequest) {
         .insert(notificationData)
     }
 
+    // Sync to Zoho Bigin asynchronously (don't wait for it)
+    // Use Promise.resolve to run after current execution context
+    Promise.resolve().then(async () => {
+      try {
+        console.log('🚀 Starting Zoho sync for call log:', callLog.id)
+        await syncCallToZoho(callLog)
+      } catch (err: any) {
+        console.error('❌ ZOHO SYNC FAILED:', err.message)
+      }
+    })
+
     return NextResponse.json(callLog, { status: 201 })
   } catch (error) {
     console.error('Error in call logs POST:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
+/**
+ * Async function to sync call log to Zoho Bigin
+ * This runs in the background and doesn't block the API response
+ */
+async function syncCallToZoho(callLog: any) {
+  try {
+    console.log('🔵 syncCallToZoho STARTED')
+    console.log('Call log ID:', callLog.id)
+    console.log('Client data:', callLog.clients)
+    console.log('Has Zoho contact ID?', !!callLog.clients?.zoho_contact_id)
+    
+    // Skip if Zoho is not configured
+    if (!process.env.ZOHO_REFRESH_TOKEN) {
+      console.log('⏭️ Zoho sync skipped: ZOHO_REFRESH_TOKEN not configured')
+      return
+    }
+
+    // Dynamically import zoho client
+    const { zohoClient } = await import('@/lib/zoho')
+
+    let zohoContactId = callLog.clients?.zoho_contact_id
+
+    // If client doesn't have Zoho ID, search or create contact
+    if (!zohoContactId) {
+      console.log(`🔍 Searching for Zoho contact for ${callLog.clients.phone}`)
+      
+      const searchResult = await zohoClient.searchContactByPhone(callLog.clients.phone)
+      
+      if (searchResult?.data && searchResult.data.length > 0) {
+        // Found existing contact
+        zohoContactId = searchResult.data[0].id
+        console.log(`✅ Found existing Zoho contact: ${zohoContactId}`)
+      } else {
+        // Create new contact in Zoho
+        console.log(`➕ Creating new Zoho contact for ${callLog.clients.name}`)
+        const createResult = await zohoClient.createContact(callLog.clients)
+        
+        if (createResult.data && createResult.data[0].code === 'SUCCESS') {
+          zohoContactId = createResult.data[0].details.id
+          console.log(`✅ Created Zoho contact: ${zohoContactId}`)
+        } else {
+          throw new Error(`Failed to create Zoho contact: ${createResult.data?.[0]?.message || 'Unknown error'}`)
+        }
+      }
+
+      // Update client with Zoho ID
+      await supabase
+        .from('clients')
+        .update({ 
+          zoho_contact_id: zohoContactId,
+          zoho_synced_at: new Date().toISOString(),
+          zoho_last_sync_status: 'success'
+        })
+        .eq('id', callLog.client_id)
+    }
+
+    // Create activity in Zoho
+    console.log(`📞 Creating Zoho activity for call log ${callLog.id}`)
+    const activityResult = await zohoClient.createActivity({
+      ...callLog,
+      zoho_contact_id: zohoContactId
+    })
+
+    if (activityResult.data && activityResult.data[0].code === 'SUCCESS') {
+      const zohoActivityId = activityResult.data[0].details.id
+      console.log(`✅ Created Zoho activity: ${zohoActivityId}`)
+      
+      // Update call log with Zoho activity ID
+      await supabase
+        .from('call_logs')
+        .update({
+          zoho_activity_id: zohoActivityId,
+          zoho_synced_at: new Date().toISOString(),
+          zoho_sync_status: 'success',
+          zoho_sync_error: null
+        })
+        .eq('id', callLog.id)
+
+      // Log successful sync
+      await supabase
+        .from('zoho_sync_log')
+        .insert({
+          sync_type: 'activity',
+          entity_type: 'call_log',
+          entity_id: callLog.id,
+          zoho_id: zohoActivityId,
+          status: 'success',
+          request_data: { 
+            call_log_id: callLog.id,
+            zoho_contact_id: zohoContactId
+          },
+          response_data: activityResult.data[0],
+          completed_at: new Date().toISOString()
+        })
+    } else {
+      throw new Error(`Failed to create Zoho activity: ${activityResult.data?.[0]?.message || 'Unknown error'}`)
+    }
+  } catch (error: any) {
+    console.error('❌ Failed to sync call to Zoho:', error.message)
+    
+    // Update call log with error status
+    await supabase
+      .from('call_logs')
+      .update({
+        zoho_sync_status: 'failed',
+        zoho_sync_error: error.message
+      })
+      .eq('id', callLog.id)
+
+    // Log failed sync
+    await supabase
+      .from('zoho_sync_log')
+      .insert({
+        sync_type: 'activity',
+        entity_type: 'call_log',
+        entity_id: callLog.id,
+        status: 'failed',
+        error_message: error.message,
+        request_data: { call_log_id: callLog.id },
+        completed_at: new Date().toISOString()
+      })
+    
+    throw error
   }
 }
