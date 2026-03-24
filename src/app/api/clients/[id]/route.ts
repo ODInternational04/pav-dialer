@@ -86,7 +86,7 @@ export async function PUT(
     console.log('📝 Client update request:', { clientId, updateData })
 
     // Remove undefined values
-    const cleanUpdateData = Object.fromEntries(
+    const cleanUpdateData: any = Object.fromEntries(
       Object.entries(updateData).filter(([_, value]) => value !== undefined)
     )
 
