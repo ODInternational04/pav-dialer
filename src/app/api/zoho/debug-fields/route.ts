@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
     )
 
     // Sample all contacts to see different field values
-    const samples = zohoContacts.data.map(contact => ({
+    const samples = zohoContacts.data.map((contact: any) => ({
       id: contact.id,
       name: `${contact.First_Name || ''} ${contact.Last_Name || ''}`.trim(),
       booking_related: bookingFields.reduce((acc: any, field) => {
