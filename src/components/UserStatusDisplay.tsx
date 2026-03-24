@@ -23,6 +23,8 @@ interface UserCallStatus {
     phone: string
     email: string
     notes: string
+    quotation_done?: boolean
+    booking_status?: string
   }
 }
 
@@ -202,6 +204,32 @@ export default function UserStatusDisplay({ showOnlyOnCall = false, compact = fa
                   </div>
                 )}
               </div>
+              
+              {/* Display Quotation and Booking Status */}
+              {(userItem.clients.quotation_done !== undefined || userItem.clients.booking_status) && (
+                <div className="mt-2 pt-2 border-t border-gray-200 flex flex-wrap gap-2">
+                  {userItem.clients.quotation_done !== undefined && (
+                    <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${
+                      userItem.clients.quotation_done 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {userItem.clients.quotation_done ? '✓ Quotation Done' : 'Quotation Pending'}
+                    </span>
+                  )}
+                  {userItem.clients.booking_status && (
+                    <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${
+                      userItem.clients.booking_status === 'Confirmed' ? 'bg-blue-100 text-blue-800' :
+                      userItem.clients.booking_status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
+                      userItem.clients.booking_status === 'Cancelled' ? 'bg-red-100 text-red-800' :
+                      userItem.clients.booking_status === 'Completed' ? 'bg-green-100 text-green-800' :
+                      'bg-gray-100 text-gray-700'
+                    }`}>
+                      📋 {userItem.clients.booking_status}
+                    </span>
+                  )}
+                </div>
+              )}
 
               {userItem.call_started_at && 
                new Date().getTime() - new Date(userItem.call_started_at).getTime() > 60 * 60 * 1000 && (

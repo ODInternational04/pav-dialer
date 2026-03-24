@@ -48,6 +48,12 @@ function getRateLimitConfig(pathname: string): { requests: number; windowMs: num
  */
 function isRateLimited(key: string, limit: number, windowMs: number): boolean {
   const now = Date.now()
+  
+  // Periodically cleanup expired entries (every 100th request)
+  if (Math.random() < 0.01) {
+    cleanupExpiredEntries()
+  }
+  
   const userLimit = rateLimitMap.get(key)
 
   if (!userLimit || now > userLimit.resetTime) {
@@ -71,18 +77,20 @@ function isRateLimited(key: string, limit: number, windowMs: number): boolean {
 /**
  * Cleans up expired rate limit entries
  * Prevents memory leaks in long-running processes
+ * Called on-demand during rate limit checks instead of using setInterval
  */
 function cleanupExpiredEntries() {
   const now = Date.now()
+  
+  // Limit cleanup to prevent performance issues
+  if (rateLimitMap.size < 100) return
+  
   for (const [key, entry] of rateLimitMap.entries()) {
     if (now > entry.resetTime) {
       rateLimitMap.delete(key)
     }
   }
 }
-
-// Cleanup expired entries every 5 minutes
-setInterval(cleanupExpiredEntries, 5 * 60 * 1000)
 
 /**
  * Detects potentially malicious patterns in requests

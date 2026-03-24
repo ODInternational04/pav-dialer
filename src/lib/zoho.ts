@@ -197,11 +197,13 @@ export class ZohoBiginClient {
         Mobile: clientData.phone,
         Email: clientData.email || null,
         Description: clientData.notes || '',
-        Source: 'Dialer System' // Try Source field instead
+        Source: 'Dialer System',
+        Quotation_done: clientData.quotation_done ? 'yes' : 'no',
+        Booking_status: clientData.booking_status && clientData.booking_status.trim() !== '' ? [clientData.booking_status] : null
       }]
     }
 
-    console.log(`[Zoho] Creating contact with Source: Dialer System`)
+    console.log('🔄 Creating in Zoho:', JSON.stringify(contactData, null, 2))
 
     const response = await fetch(`${process.env.ZOHO_API_DOMAIN}/bigin/v1/Contacts`, {
       method: 'POST',
@@ -213,6 +215,8 @@ export class ZohoBiginClient {
     })
 
     const result = await response.json()
+    
+    console.log('✅ Zoho create response:', JSON.stringify(result, null, 2))
     
     if (!response.ok) {
       console.error('Zoho API error:', result)
@@ -242,9 +246,13 @@ export class ZohoBiginClient {
         Mobile: clientData.phone,
         Email: clientData.email || null,
         Description: clientData.notes || '',
-        Source: 'Dialer System' // Keep marking as Dialer System
+        Source: 'Dialer System',
+        Quotation_done: clientData.quotation_done ? 'yes' : 'no',
+        Booking_status: clientData.booking_status && clientData.booking_status.trim() !== '' ? [clientData.booking_status] : null
       }]
     }
+
+    console.log('🔄 Sending to Zoho:', JSON.stringify(updateData, null, 2))
 
     const response = await fetch(`${process.env.ZOHO_API_DOMAIN}/bigin/v1/Contacts`, {
       method: 'PUT',
@@ -256,6 +264,8 @@ export class ZohoBiginClient {
     })
 
     const result = await response.json()
+    
+    console.log('✅ Zoho response:', JSON.stringify(result, null, 2))
     
     if (!response.ok) {
       console.error('Zoho API error:', result)

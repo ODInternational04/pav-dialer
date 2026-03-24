@@ -83,13 +83,22 @@ export async function PUT(
     const body: UpdateClientRequest = await request.json()
     const { id, ...updateData } = body
 
+    console.log('📝 Client update request:', { clientId, updateData })
+
     // Remove undefined values
     const cleanUpdateData = Object.fromEntries(
       Object.entries(updateData).filter(([_, value]) => value !== undefined)
     )
 
+    // Convert empty string to null for booking_status
+    if (cleanUpdateData.booking_status === '') {
+      cleanUpdateData.booking_status = null
+    }
+
     // Add last_updated_by
     cleanUpdateData.last_updated_by = payload.userId
+
+    console.log('🔄 Clean update data:', cleanUpdateData)
 
     const { data: updatedClient, error } = await supabase
       .from('clients')
@@ -111,18 +120,35 @@ export async function PUT(
     }
 
     // Automatically sync to Zoho Bigin if configured and contact exists
+    console.log('🔍 Checking Zoho sync...', {
+      hasRefreshToken: !!process.env.ZOHO_REFRESH_TOKEN,
+      hasClient: !!updatedClient,
+      zohoContactId: updatedClient?.zoho_contact_id
+    })
+
     if (process.env.ZOHO_REFRESH_TOKEN && updatedClient) {
       try {
         if (updatedClient.zoho_contact_id) {
           // Update existing Zoho contact
-          console.log(`[Zoho] Auto-syncing updated client: ${updatedClient.name}`)
+          console.log(`[Zoho] 🔄 Auto-syncing updated client: ${updatedClient.name}`)
+          console.log('[Zoho] 📝 Data being sent:', {
+            name: updatedClient.name,
+            phone: updatedClient.phone,
+            email: updatedClient.email,
+            quotation_done: updatedClient.quotation_done,
+            booking_status: updatedClient.booking_status
+          })
           
           const result = await zohoClient.updateContact(updatedClient.zoho_contact_id, {
             name: updatedClient.name,
             phone: updatedClient.phone,
             email: updatedClient.email || null,
-            notes: updatedClient.notes || ''
+            notes: updatedClient.notes || '',
+            quotation_done: updatedClient.quotation_done !== undefined ? updatedClient.quotation_done : false,
+            booking_status: updatedClient.booking_status || null
           })
+
+          console.log('[Zoho] ✅ Update result:', result)
 
           // Update sync timestamp
           await supabase
@@ -142,7 +168,9 @@ export async function PUT(
             name: updatedClient.name,
             phone: updatedClient.phone,
             email: updatedClient.email || null,
-            notes: updatedClient.notes || ''
+            notes: updatedClient.notes || '',
+            quotation_done: updatedClient.quotation_done !== undefined ? updatedClient.quotation_done : false,
+            booking_status: updatedClient.booking_status || null
           })
 
           if (zohoContact?.data?.[0]?.details?.id) {
@@ -162,18 +190,23 @@ export async function PUT(
           }
         }
       } catch (zohoError: any) {
-        console.error('[Zoho] Failed to sync client to Zoho:', zohoError.message)
+        console.error('[Zoho] ❌ Failed to sync client to Zoho:', zohoError)
+        console.error('[Zoho] ❌ Error details:', zohoError.message, zohoError.stack)
         
         await supabase
           .from('clients')
           .update({ zoho_last_sync_status: 'failed' })
           .eq('id', updatedClient.id)
       }
+    } else {
+      console.log('⚠️ Zoho sync skipped - missing config or client data')
     }
 
     return NextResponse.json({
       message: 'Client updated successfully',
-      client: updatedClient
+      client: updatedClient,
+      zoho_synced: updatedClient.zoho_contact_id ? true : false,
+      zoho_status: updatedClient.zoho_last_sync_status || 'not_synced'
     })
   } catch (error) {
     console.error('Error in client update:', error)

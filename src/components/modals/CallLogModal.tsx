@@ -38,7 +38,7 @@ export default function CallLogModal({
   autoStartTimer = false,
   onCallEndedManually
 }: CallLogModalProps) {
-  const [formData, setFormData] = useState<CreateCallLogRequest>({
+  const [formData, setFormData] = useState<CreateCallLogRequest & { quotation_done?: boolean; booking_status?: string }>({
     client_id: client.id,
     call_type: 'outbound',
     call_status: 'completed',
@@ -46,6 +46,8 @@ export default function CallLogModal({
     notes: '',
     callback_requested: false,
     callback_time: '',
+    quotation_done: client.quotation_done || false,
+    booking_status: client.booking_status || ''
   })
 
   const [feedbackData, setFeedbackData] = useState({
@@ -93,6 +95,8 @@ export default function CallLogModal({
         notes: existingCallLog.notes,
         callback_requested: existingCallLog.callback_requested,
         callback_time: existingCallLog.callback_time || '',
+        quotation_done: client.quotation_done || false,
+        booking_status: client.booking_status || ''
       })
       setCallDuration(existingCallLog.call_duration || 0)
     } else {
@@ -109,6 +113,8 @@ export default function CallLogModal({
         notes: '', // No pre-fill notes
         callback_requested: false,
         callback_time: '',
+        quotation_done: client.quotation_done || false,
+        booking_status: client.booking_status || ''
       })
       setCallDuration(duration)
     }
@@ -323,6 +329,9 @@ export default function CallLogModal({
 
     setIsLoading(true)
     try {
+      // Get token once at the beginning
+      const token = localStorage.getItem('token')
+      
       // End any active 3CX call session before saving
       const activeCall = threeCXService.getActiveCallByClient(client.id)
       if (activeCall) {
@@ -332,6 +341,39 @@ export default function CallLogModal({
       
       // Save call log first
       await onSave(formData)
+      
+      // Update client details (quotation_done and booking_status) if they changed
+      if (token && (
+        formData.quotation_done !== client.quotation_done || 
+        formData.booking_status !== client.booking_status
+      )) {
+        try {
+          const updateResponse = await fetch(`/api/clients/${client.id}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              name: client.name,
+              phone: client.phone,
+              email: client.email,
+              notes: client.notes,
+              quotation_done: formData.quotation_done,
+              booking_status: formData.booking_status
+            })
+          })
+          
+          if (updateResponse.ok) {
+            console.log('✅ Client details updated successfully')
+          } else {
+            console.error('⚠️ Failed to update client details, but call log was saved')
+          }
+        } catch (updateError) {
+          console.error('Error updating client details:', updateError)
+          // Don't fail the whole operation if client update fails
+        }
+      }
       
       // Clear callback context if this was a callback call
       if (isCallbackCall) {
@@ -346,7 +388,6 @@ export default function CallLogModal({
       // Create customer feedback if enabled
       if (feedbackData.has_feedback) {
         console.log('🎯 Saving customer feedback...', feedbackData)
-        const token = localStorage.getItem('token')
         const feedbackResponse = await fetch('/api/debug/customer-feedback', {
           method: 'POST',
           headers: {
@@ -390,7 +431,6 @@ export default function CallLogModal({
         }
       }
       
-      const token = localStorage.getItem('token')
       await fetch('/api/user-status', {
         method: 'PUT',
         headers: {
@@ -516,6 +556,39 @@ export default function CallLogModal({
                 <p className="font-medium">{client.name}</p>
                 <p>{client.phone}</p>
                 {client.email && <p className="text-gray-500">{client.email}</p>}
+                
+                {/* Display Quotation Done status */}
+                <div className="mt-2 flex items-center space-x-4">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-gray-700 font-medium">Quotation:</span>
+                    {client.quotation_done ? (
+                      <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                        ✓ Done
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-600">
+                        Not Done
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Display Booking Status */}
+                  {(client as any).booking_status && (
+                    <div className="flex items-center space-x-2">
+                      <span className="text-gray-700 font-medium">Booking:</span>
+                      <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${
+                        (client as any).booking_status === 'Confirmed' ? 'bg-blue-100 text-blue-800' :
+                        (client as any).booking_status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
+                        (client as any).booking_status === 'Cancelled' ? 'bg-red-100 text-red-800' :
+                        (client as any).booking_status === 'Completed' ? 'bg-green-100 text-green-800' :
+                        'bg-gray-100 text-gray-700'
+                      }`}>
+                        {(client as any).booking_status}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                
                 {isCallbackCall && (
                   <p className={`mt-1 font-medium ${
                     callbackPriority === 'overdue' ? 'text-red-600' : 'text-orange-600'
@@ -664,6 +737,49 @@ export default function CallLogModal({
             {errors.notes && (
               <p className="text-sm text-danger-600 mt-1">{errors.notes}</p>
             )}
+          </div>
+
+          {/* Update Client Details Section */}
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3">📋 Update Client Details</h3>
+            
+            <div className="space-y-3">
+              {/* Quotation Done Checkbox */}
+              <div className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  id="update_quotation_done"
+                  checked={formData.quotation_done || false}
+                  onChange={(e) => setFormData(prev => ({ ...prev, quotation_done: e.target.checked }))}
+                  className="w-5 h-5 text-primary-600 border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
+                />
+                <label htmlFor="update_quotation_done" className="text-sm font-medium text-gray-700 cursor-pointer">
+                  Quotation Done
+                </label>
+              </div>
+
+              {/* Booking Status Dropdown */}
+              <div>
+                <label className="label text-xs">Booking Status</label>
+                <select
+                  value={formData.booking_status || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, booking_status: e.target.value }))}
+                  className="input text-sm"
+                >
+                  <option value="">-- Select Status --</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Confirmed">Confirmed</option>
+                  <option value="Cancelled">Cancelled</option>
+                  <option value="Completed">Completed</option>
+                  <option value="On Hold">On Hold</option>
+                  <option value="Follow Up Required">Follow Up Required</option>
+                </select>
+              </div>
+            </div>
+            
+            <p className="text-xs text-gray-600 mt-2">
+              💡 Changes will be saved to client record when you save this call log
+            </p>
           </div>
 
           {/* Callback Section */}

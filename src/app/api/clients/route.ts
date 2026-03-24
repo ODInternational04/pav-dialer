@@ -217,6 +217,8 @@ export async function POST(request: NextRequest) {
       phone: body.phone.trim(),
       email: body.email?.trim() || null,
       notes: body.notes?.trim() || '',
+      quotation_done: body.quotation_done !== undefined ? body.quotation_done : false,
+      booking_status: body.booking_status?.trim() || null,
       created_by: payload.userId,
       last_updated_by: payload.userId
     }
@@ -236,17 +238,33 @@ export async function POST(request: NextRequest) {
     }
 
     // Automatically sync to Zoho Bigin if configured
+    console.log('🔍 Checking Zoho sync for new client...', {
+      hasRefreshToken: !!process.env.ZOHO_REFRESH_TOKEN,
+      hasClient: !!newClient
+    })
+
     if (process.env.ZOHO_REFRESH_TOKEN && newClient) {
       try {
-        console.log(`[Zoho] Auto-syncing new client: ${newClient.name}`)
+        console.log(`[Zoho] 🔄 Auto-syncing new client: ${newClient.name}`)
+        console.log('[Zoho] 📝 Data being sent:', {
+          name: newClient.name,
+          phone: newClient.phone,
+          email: newClient.email,
+          quotation_done: newClient.quotation_done,
+          booking_status: newClient.booking_status
+        })
         
         // Create contact in Zoho
         const zohoContact = await zohoClient.createContact({
           name: newClient.name,
           phone: newClient.phone,
           email: newClient.email || null,
-          notes: newClient.notes || ''
+          notes: newClient.notes || '',
+          quotation_done: newClient.quotation_done !== undefined ? newClient.quotation_done : false,
+          booking_status: newClient.booking_status || null
         })
+
+        console.log('[Zoho] ✅ Create result:', zohoContact)
 
         if (zohoContact?.data?.[0]?.details?.id) {
           const zohoId = zohoContact.data[0].details.id
@@ -283,7 +301,8 @@ export async function POST(request: NextRequest) {
         }
       } catch (zohoError: any) {
         // Log error but don't fail the client creation
-        console.error('[Zoho] Failed to sync client to Zoho:', zohoError.message)
+        console.error('[Zoho] ❌ Failed to sync client to Zoho:', zohoError)
+        console.error('[Zoho] ❌ Error details:', zohoError.message, zohoError.stack)
         
         // Update sync status as failed
         await supabase
@@ -293,6 +312,8 @@ export async function POST(request: NextRequest) {
           })
           .eq('id', newClient.id)
       }
+    } else {
+      console.log('⚠️ Zoho sync skipped for new client - missing config')
     }
 
     return NextResponse.json(newClient, { status: 201 })

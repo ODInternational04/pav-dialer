@@ -21,6 +21,12 @@ export interface Client {
   updated_at: string
   created_by: string
   last_updated_by: string
+  // Zoho Bigin custom fields
+  quotation_done?: boolean
+  booking_status?: string
+  zoho_contact_id?: string
+  zoho_synced_at?: string
+  zoho_last_sync_status?: string
   // Enhanced fields for call tracking
   total_calls?: number
   last_call_date?: string
@@ -118,6 +124,8 @@ export interface CreateClientRequest {
   phone: string
   email?: string
   notes?: string
+  quotation_done?: boolean
+  booking_status?: string
   custom_fields?: Record<string, any>
 }
 
