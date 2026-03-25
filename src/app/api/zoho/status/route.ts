@@ -27,14 +27,39 @@ export async function GET(request: NextRequest) {
       refresh_token_length: process.env.ZOHO_REFRESH_TOKEN?.length || 0
     }
 
+    // Test the connection if configured
+    let connectionTest = null
+    if (status.configured) {
+      try {
+        const { zohoClient } = await import('@/lib/zoho')
+        console.log('🧪 Testing Zoho API connection...')
+        const testToken = await zohoClient.getAccessToken()
+        connectionTest = {
+          success: !!testToken,
+          message: 'Successfully connected to Zoho API',
+          token_length: testToken?.length || 0
+        }
+      } catch (testError: any) {
+        connectionTest = {
+          success: false,
+          message: testError.message,
+          error: true
+        }
+      }
+    }
+
     return NextResponse.json({
       status: status.configured ? 'configured' : 'not_configured',
       details: status,
+      connectionTest,
       message: status.configured 
-        ? 'Zoho Bigin integration is configured' 
+        ? (connectionTest?.success 
+            ? '✅ Zoho Bigin integration is configured and working' 
+            : '⚠️ Zoho configured but connection failed')
         : 'Zoho Bigin integration is NOT configured. Set environment variables to enable auto-sync.'
     })
   } catch (error: any) {
+    console.error('❌ Status check error:', error)
     return NextResponse.json({
       error: 'Failed to check status',
       message: error.message

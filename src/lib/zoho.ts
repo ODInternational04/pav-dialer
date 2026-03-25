@@ -46,32 +46,55 @@ export class ZohoBiginClient {
 
     // Refresh token
     const refreshToken = process.env.ZOHO_REFRESH_TOKEN
+    const clientId = process.env.ZOHO_CLIENT_ID
+    const clientSecret = process.env.ZOHO_CLIENT_SECRET
+
     if (!refreshToken) {
+      console.error('❌ ZOHO_REFRESH_TOKEN is not configured')
       throw new Error('ZOHO_REFRESH_TOKEN not configured. Run OAuth flow first.')
     }
 
-    const response = await fetch('https://accounts.zoho.com/oauth/v2/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        refresh_token: refreshToken,
-        client_id: process.env.ZOHO_CLIENT_ID!,
-        client_secret: process.env.ZOHO_CLIENT_SECRET!,
-        grant_type: 'refresh_token'
-      })
-    })
-
-    if (!response.ok) {
-      const error = await response.text()
-      throw new Error(`Failed to refresh Zoho token: ${error}`)
+    if (!clientId || !clientSecret) {
+      console.error('❌ ZOHO_CLIENT_ID or ZOHO_CLIENT_SECRET is not configured')
+      throw new Error('Zoho client credentials not configured')
     }
 
-    const data: ZohoTokenResponse = await response.json()
-    this.accessToken = data.access_token
-    this.tokenExpiry = Date.now() + (data.expires_in * 1000) - 60000 // 1 min buffer
-    
-    console.log('✅ Zoho access token refreshed')
-    return this.accessToken
+    console.log('🔄 Refreshing Zoho access token...')
+
+    try {
+      const response = await fetch('https://accounts.zoho.com/oauth/v2/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          refresh_token: refreshToken,
+          client_id: clientId,
+          client_secret: clientSecret,
+          grant_type: 'refresh_token'
+        })
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('❌ Zoho token refresh failed:', response.status, errorText)
+        throw new Error(`Failed to refresh Zoho token (${response.status}): ${errorText}`)
+      }
+
+      const data: ZohoTokenResponse = await response.json()
+      
+      if (!data.access_token) {
+        console.error('❌ No access token in response:', data)
+        throw new Error('No access token received from Zoho')
+      }
+
+      this.accessToken = data.access_token
+      this.tokenExpiry = Date.now() + (data.expires_in * 1000) - 60000 // 1 min buffer
+      
+      console.log('✅ Zoho access token refreshed successfully')
+      return this.accessToken
+    } catch (error: any) {
+      console.error('❌ Error in getAccessToken:', error.message)
+      throw error
+    }
   }
 
   /**
@@ -130,21 +153,29 @@ export class ZohoBiginClient {
   async getContacts(page = 1, perPage = 200) {
     const token = await this.getAccessToken()
     
-    const response = await fetch(
-      `${process.env.ZOHO_API_DOMAIN}/bigin/v1/Contacts?page=${page}&per_page=${perPage}`,
-      {
+    const url = `${process.env.ZOHO_API_DOMAIN}/bigin/v1/Contacts?page=${page}&per_page=${perPage}`
+    console.log(`📡 Fetching contacts from: ${url}`)
+    
+    try {
+      const response = await fetch(url, {
         headers: {
           'Authorization': `Zoho-oauthtoken ${token}`
         }
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error(`❌ Zoho API error (${response.status}):`, errorText)
+        throw new Error(`Failed to fetch Zoho contacts (${response.status}): ${errorText}`)
       }
-    )
 
-    if (!response.ok) {
-      const error = await response.text()
-      throw new Error(`Failed to fetch Zoho contacts: ${error}`)
+      const data = await response.json()
+      console.log(`✅ Retrieved ${data.data?.length || 0} contacts from page ${page}`)
+      return data
+    } catch (error: any) {
+      console.error('❌ Error fetching contacts:', error.message)
+      throw error
     }
-
-    return response.json()
   }
 
   /**

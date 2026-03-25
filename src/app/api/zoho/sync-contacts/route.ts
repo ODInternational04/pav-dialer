@@ -33,6 +33,10 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
+    // Timeout protection for Vercel (20 seconds max processing time)
+    const startTime = Date.now()
+    const MAX_PROCESSING_TIME = 20000 // 20 seconds
+    
     let page = 1
     let hasMore = true
     let syncedCount = 0
@@ -40,11 +44,19 @@ export async function POST(request: NextRequest) {
     let updatedCount = 0
     let skippedCount = 0
     const errors: string[] = []
+    let timeoutReached = false
 
     console.log('🔄 Starting Zoho contacts sync...')
 
-    while (hasMore) {
+    while (hasMore && !timeoutReached) {
       try {
+        // Check if we're approaching timeout
+        if (Date.now() - startTime > MAX_PROCESSING_TIME) {
+          console.log('⏱️ Timeout approaching, stopping sync early')
+          timeoutReached = true
+          break
+        }
+
         console.log(`📥 Fetching Zoho contacts page ${page}...`)
         const zohoContacts = await zohoClient.getContacts(page)
         
@@ -217,22 +229,42 @@ export async function POST(request: NextRequest) {
 
     console.log(`✅ Sync completed: ${syncedCount} processed, ${createdCount} created, ${updatedCount} updated, ${skippedCount} skipped`)
 
+    // Build response message
+    let message = `Successfully synced ${syncedCount} contacts from Zoho Bigin`
+    if (timeoutReached) {
+      message = `⏱️ Partial sync completed (${syncedCount} contacts). Run sync again to continue.`
+    }
+
     return NextResponse.json({
       success: true,
-      message: `Successfully synced ${syncedCount} contacts from Zoho Bigin`,
+      message: message,
       details: {
         processed: syncedCount,
         created: createdCount,
         updated: updatedCount,
         skipped: skippedCount,
+        timeoutReached: timeoutReached,
+        lastPage: page,
         errors: errors.length > 0 ? errors : null
       }
     })
   } catch (error: any) {
     console.error('❌ Zoho sync error:', error)
+    
+    // Better error messages for common issues
+    let errorMessage = error.message
+    if (errorMessage.includes('ZOHO_REFRESH_TOKEN')) {
+      errorMessage = 'Zoho authentication failed. Token may be expired. Please re-authenticate.'
+    } else if (errorMessage.includes('Failed to refresh Zoho token')) {
+      errorMessage = 'Failed to refresh Zoho access token. Please verify your Zoho credentials in environment variables.'
+    } else if (errorMessage.includes('Failed to fetch Zoho contacts')) {
+      errorMessage = 'Unable to connect to Zoho API. Please check your internet connection and Zoho API credentials.'
+    }
+    
     return NextResponse.json({
       error: 'Sync failed',
-      message: error.message
+      message: errorMessage,
+      details: error.stack
     }, { status: 500 })
   }
 }
