@@ -109,7 +109,7 @@ export default function StatisticsPage() {
               <ChartBarIcon className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-3xl font-bold text-gray-800 mb-2">Statistics Portal</h1>
-            <p className="text-gray-600">Gold Client Daily Statistics</p>
+            <p className="text-gray-600">Pavilion Hotel Daily Call Statistics</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6">
@@ -167,7 +167,7 @@ export default function StatisticsPage() {
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-800 mb-2">Gold Client Statistics</h1>
+              <h1 className="text-3xl font-bold text-gray-800 mb-2">Pavilion Hotel Statistics</h1>
               <p className="text-gray-600">
                 Daily Overview - {statistics?.date ? new Date(statistics.date).toLocaleDateString('en-US', { 
                   weekday: 'long', 
@@ -215,7 +215,7 @@ export default function StatisticsPage() {
           <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl shadow-lg p-6 text-white">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-green-100 text-sm font-semibold mb-1">New Gold Clients</p>
+                <p className="text-green-100 text-sm font-semibold mb-1">New Clients Today</p>
                 <p className="text-5xl font-bold">{statistics?.newClients || 0}</p>
               </div>
               <div className="bg-white/20 rounded-full p-4">

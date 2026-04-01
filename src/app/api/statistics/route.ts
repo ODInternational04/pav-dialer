@@ -29,16 +29,10 @@ export async function POST(request: NextRequest) {
     const tomorrow = new Date(today)
     tomorrow.setDate(tomorrow.getDate() + 1)
 
-    // Get total calls for today (gold clients only)
+    // Get total calls for today
     const { data: calls, error: callsError } = await supabase
       .from('call_logs')
-      .select(`
-        id,
-        created_at,
-        user_id,
-        clients!inner(client_type)
-      `)
-      .eq('clients.client_type', 'gold')
+      .select('id, created_at, user_id')
       .gte('created_at', today.toISOString())
       .lt('created_at', tomorrow.toISOString())
 
@@ -47,11 +41,10 @@ export async function POST(request: NextRequest) {
       throw callsError
     }
 
-    // Get new gold clients created today
+    // Get new clients created today
     const { data: newClients, error: clientsError } = await supabase
       .from('clients')
       .select('id')
-      .eq('client_type', 'gold')
       .gte('created_at', today.toISOString())
       .lt('created_at', tomorrow.toISOString())
 
