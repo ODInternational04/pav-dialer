@@ -27,11 +27,14 @@ export async function GET(request: NextRequest) {
         is_on_call,
         call_started_at,
         current_call_client_id,
+        user_status,
+        status_changed_at,
+        status_reason,
         clients:current_call_client_id (
           id,
-          principal_key_holder,
-          box_number,
-          telephone_cell
+          name,
+          phone,
+          email
         )
       `)
       .eq('is_active', true)

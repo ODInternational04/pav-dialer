@@ -3,6 +3,7 @@
 import { useAuth } from '@/contexts/AuthContext'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import QuickCallButton from '@/components/QuickCallButton'
+import UserStatusSelector from '@/components/UserStatusSelector'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -286,6 +287,32 @@ export default function Dashboard() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* User Status Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-1">
+            <UserStatusSelector />
+          </div>
+          
+          {/* Quick Stats Summary */}
+          <div className="lg:col-span-2 bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Today's Summary</h3>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="text-center">
+                <p className="text-2xl font-bold text-blue-600">{stats?.totalCallsToday || 0}</p>
+                <p className="text-xs text-gray-600 mt-1">Calls Made</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-green-600">{stats?.successRate || 0}%</p>
+                <p className="text-xs text-gray-600 mt-1">Success</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-orange-600">{stats?.pendingCallbacks || 0}</p>
+                <p className="text-xs text-gray-600 mt-1">Callbacks</p>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Main Content Grid */}

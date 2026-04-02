@@ -1,3 +1,12 @@
+export type UserStatus = 
+  | 'available'
+  | 'on_call' 
+  | 'lunch_break'
+  | 'comfort_break'
+  | 'meeting'
+  | 'coaching'
+  | 'unavailable'
+
 export interface User {
   id: string
   email: string
@@ -9,6 +18,12 @@ export interface User {
   created_at: string
   updated_at: string
   last_login?: string
+  user_status?: UserStatus
+  status_changed_at?: string
+  status_reason?: string
+  is_on_call?: boolean
+  call_started_at?: string
+  current_call_client_id?: string
 }
 
 export interface Client {

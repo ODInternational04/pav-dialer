@@ -1,11 +1,17 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+import { UserStatus } from '@/types'
 import { 
   PhoneIcon,
   UserIcon,
   ClockIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  CheckCircleIcon,
+  UserGroupIcon,
+  AcademicCapIcon,
+  XCircleIcon,
+  CakeIcon
 } from '@heroicons/react/24/outline'
 
 interface UserCallStatus {
@@ -17,6 +23,9 @@ interface UserCallStatus {
   is_on_call: boolean
   call_started_at?: string
   current_call_client_id?: string
+  user_status?: UserStatus
+  status_changed_at?: string
+  status_reason?: string
   clients?: {
     id: string
     name: string
@@ -73,6 +82,67 @@ export default function UserStatusDisplay({ showOnlyOnCall = false, compact = fa
     return `${hours}h ${minutes}m`
   }
 
+  const getStatusInfo = (status?: UserStatus) => {
+    switch (status) {
+      case 'available':
+        return { 
+          label: 'Available', 
+          color: 'text-green-600', 
+          bgColor: 'bg-green-100',
+          icon: CheckCircleIcon 
+        }
+      case 'on_call':
+        return { 
+          label: 'On Call', 
+          color: 'text-red-600', 
+          bgColor: 'bg-red-100',
+          icon: PhoneIcon 
+        }
+      case 'lunch_break':
+        return { 
+          label: 'Lunch Break', 
+          color: 'text-orange-600', 
+          bgColor: 'bg-orange-100',
+          icon: CakeIcon 
+        }
+      case 'comfort_break':
+        return { 
+          label: 'Comfort Break', 
+          color: 'text-blue-600', 
+          bgColor: 'bg-blue-100',
+          icon: ClockIcon 
+        }
+      case 'meeting':
+        return { 
+          label: 'In Meeting', 
+          color: 'text-purple-600', 
+          bgColor: 'bg-purple-100',
+          icon: UserGroupIcon 
+        }
+      case 'coaching':
+        return { 
+          label: 'Coaching', 
+          color: 'text-indigo-600', 
+          bgColor: 'bg-indigo-100',
+          icon: AcademicCapIcon 
+        }
+      case 'unavailable':
+        return { 
+          label: 'Unavailable', 
+          color: 'text-red-600', 
+          bgColor: 'bg-red-100',
+          icon: XCircleIcon 
+        }
+      default:
+        return { 
+          label: 'Unknown', 
+          color: 'text-gray-600', 
+          bgColor: 'bg-gray-100',
+          icon: UserIcon 
+        }
+    }
+  }
+
   useEffect(() => {
     if (user) {
       fetchUserStatus()
@@ -106,74 +176,97 @@ export default function UserStatusDisplay({ showOnlyOnCall = false, compact = fa
   if (compact) {
     return (
       <div className="space-y-2">
-        {usersToShow.map((userItem) => (
-          <div
-            key={userItem.id}
-            className={`flex items-center space-x-2 p-2 rounded-lg ${
-              userItem.is_on_call ? 'bg-red-50 border border-red-200' : 'bg-gray-50'
-            }`}
-          >
-            <div className={`w-2 h-2 rounded-full ${
-              userItem.is_on_call ? 'bg-red-500 animate-pulse' : 'bg-green-500'
-            }`}></div>
-            <span className="text-sm font-medium">
-              {userItem.first_name} {userItem.last_name}
-            </span>
-            {userItem.is_on_call && (
-              <span className="text-xs text-red-600">
-                On call
+        {usersToShow.map((userItem) => {
+          const statusInfo = getStatusInfo(userItem.user_status)
+          const StatusIcon = statusInfo.icon
+          
+          return (
+            <div
+              key={userItem.id}
+              className={`flex items-center space-x-2 p-2 rounded-lg ${
+                userItem.is_on_call ? 'bg-red-50 border border-red-200' : 'bg-gray-50'
+              }`}
+            >
+              <div className={`w-2 h-2 rounded-full ${
+                userItem.is_on_call ? 'bg-red-500 animate-pulse' : 
+                userItem.user_status === 'available' ? 'bg-green-500' : 'bg-orange-500'
+              }`}></div>
+              <span className="text-sm font-medium">
+                {userItem.first_name} {userItem.last_name}
               </span>
-            )}
-          </div>
-        ))}
+              <span className={`text-xs ${statusInfo.color}`}>
+                {statusInfo.label}
+              </span>
+            </div>
+          )
+        })}
       </div>
     )
   }
 
   return (
     <div className="space-y-4">
-      {usersToShow.map((userItem) => (
-        <div
-          key={userItem.id}
-          className={`border rounded-lg p-4 transition-all ${
-            userItem.is_on_call 
-              ? 'border-red-200 bg-red-50' 
-              : 'border-gray-200 bg-white hover:bg-gray-50'
-          }`}
-        >
-          <div className="flex items-start justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="relative">
-                <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-                  <UserIcon className="w-5 h-5 text-gray-600" />
+      {usersToShow.map((userItem) => {
+        const statusInfo = getStatusInfo(userItem.user_status)
+        const StatusIcon = statusInfo.icon
+        
+        return (
+          <div
+            key={userItem.id}
+            className={`border rounded-lg p-4 transition-all ${
+              userItem.is_on_call 
+                ? 'border-red-200 bg-red-50' 
+                : statusInfo.bgColor === 'bg-green-100'
+                ? 'border-gray-200 bg-white hover:bg-gray-50'
+                : `border-gray-200 ${statusInfo.bgColor}`
+            }`}
+          >
+            <div className="flex items-start justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="relative">
+                  <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                    <UserIcon className="w-5 h-5 text-gray-600" />
+                  </div>
+                  <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${
+                    userItem.is_on_call ? 'bg-red-500 animate-pulse' : 
+                    userItem.user_status === 'available' ? 'bg-green-500' : 'bg-orange-500'
+                  }`}></div>
                 </div>
-                <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${
-                  userItem.is_on_call ? 'bg-red-500 animate-pulse' : 'bg-green-500'
-                }`}></div>
+                
+                <div>
+                  <h3 className="font-medium text-gray-900">
+                    {userItem.first_name} {userItem.last_name}
+                  </h3>
+                  <p className="text-sm text-gray-500 capitalize">{userItem.role}</p>
+                  <p className="text-xs text-gray-400">{userItem.email}</p>
+                </div>
               </div>
-              
-              <div>
-                <h3 className="font-medium text-gray-900">
-                  {userItem.first_name} {userItem.last_name}
-                </h3>
-                <p className="text-sm text-gray-500 capitalize">{userItem.role}</p>
-                <p className="text-xs text-gray-400">{userItem.email}</p>
-              </div>
-            </div>
 
-            <div className="text-right">
-              {userItem.is_on_call ? (
+              <div className="text-right">
                 <div className="flex items-center space-x-2">
-                  <PhoneIcon className="w-4 h-4 text-red-500" />
-                  <span className="text-sm font-medium text-red-600">On Call</span>
+                  <StatusIcon className={`w-4 h-4 ${statusInfo.color}`} />
+                  <span className={`text-sm font-medium ${statusInfo.color}`}>
+                    {statusInfo.label}
+                  </span>
                 </div>
-              ) : (
-                <span className="text-sm text-green-600 font-medium">Available</span>
-              )}
+                {userItem.status_changed_at && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    {getCallDuration(userItem.status_changed_at)}
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
 
-          {userItem.is_on_call && userItem.clients && (
+            {/* Status Reason */}
+            {userItem.status_reason && (
+              <div className="mt-2 p-2 bg-white rounded border border-gray-200">
+                <p className="text-xs text-gray-600 italic">
+                  <strong>Note:</strong> {userItem.status_reason}
+                </p>
+              </div>
+            )}
+
+            {userItem.is_on_call && userItem.clients && (
             <div className="mt-3 p-3 bg-white rounded border border-red-100">
               <div className="flex items-center space-x-2 mb-2">
                 <PhoneIcon className="w-4 h-4 text-red-500" />
@@ -240,8 +333,9 @@ export default function UserStatusDisplay({ showOnlyOnCall = false, compact = fa
               )}
             </div>
           )}
-        </div>
-      ))}
+          </div>
+        )
+      })}
     </div>
   )
 }
