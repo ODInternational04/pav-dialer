@@ -24,6 +24,7 @@ export default function StatisticsPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [statistics, setStatistics] = useState<Statistics | null>(null)
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -37,7 +38,7 @@ export default function StatisticsPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username, password, date: selectedDate })
       })
 
       console.log('Response status:', response.status)
@@ -78,7 +79,7 @@ export default function StatisticsPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ username, password: 'stats123' })
+        body: JSON.stringify({ username, password: 'stats123', date: selectedDate })
       })
 
       if (response.ok) {
@@ -99,6 +100,13 @@ export default function StatisticsPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated])
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      refreshData()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate])
 
   if (!isAuthenticated) {
     return (
@@ -178,6 +186,16 @@ export default function StatisticsPage() {
               </p>
             </div>
             <div className="flex items-center gap-3">
+              <div className="flex flex-col items-end">
+                <label className="text-xs font-semibold text-gray-600 mb-1">Select Date</label>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  max={new Date().toISOString().split('T')[0]}
+                  className="px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all duration-200"
+                />
+              </div>
               <button
                 onClick={refreshData}
                 disabled={loading}

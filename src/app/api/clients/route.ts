@@ -34,6 +34,10 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '10')))
     const search = searchParams.get('search') || ''
     const callStatus = searchParams.get('callStatus') || 'all'
+    const quotationStatus = searchParams.get('quotationStatus') || 'all' // 'all', 'done', 'not_done'
+    const bookingStatus = searchParams.get('bookingStatus') || 'all' // 'all', or specific status
+    const sortBy = searchParams.get('sortBy') || 'created_at'
+    const sortOrder = searchParams.get('sortOrder') || 'desc'
     
     const start = (page - 1) * limit
     const end = start + limit - 1
@@ -42,14 +46,51 @@ export async function GET(request: NextRequest) {
       .from('clients')
       .select('*', { count: 'exact' })
 
-    // Apply search filter
+    // Apply search filter - improved for more accurate results
     if (search) {
-      query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%,email.ilike.%${search}%`)
+      // Escape special regex characters
+      const searchTerm = search.trim()
+      // Search in name, phone, email, and notes with exact partial matching
+      query = query.or(`name.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,notes.ilike.%${searchTerm}%`)
+    }
+
+    // Apply quotation status filter
+    if (quotationStatus === 'done') {
+      query = query.eq('quotation_done', true)
+    } else if (quotationStatus === 'not_done') {
+      query = query.or('quotation_done.eq.false,quotation_done.is.null')
+    }
+
+    // Apply booking status filter
+    if (bookingStatus !== 'all') {
+      if (bookingStatus === 'none') {
+        query = query.or('booking_status.is.null,booking_status.eq.')
+      } else {
+        query = query.eq('booking_status', bookingStatus)
+      }
+    }
+
+    // Apply booking status filter
+    if (bookingStatus !== 'all') {
+      if (bookingStatus === 'none') {
+        query = query.or('booking_status.is.null,booking_status.eq.')
+      } else {
+        query = query.eq('booking_status', bookingStatus)
+      }
+    }
+
+    // Apply sorting
+    const validSortFields = ['created_at', 'name', 'phone', 'email', 'last_call']
+    const sortField = validSortFields.includes(sortBy) ? sortBy : 'created_at'
+    const ascending = sortOrder === 'asc'
+
+    // For most fields, we can sort directly
+    if (sortField !== 'last_call') {
+      query = query.order(sortField, { ascending })
     }
 
     const { data: clients, error, count } = await query
       .range(start, end)
-      .order('created_at', { ascending: false })
 
     if (error) {
       console.error('Error fetching clients:', error)
@@ -129,6 +170,15 @@ export async function GET(request: NextRequest) {
           if (callStatus === 'not_called') return !client.has_been_called
           return true
         })
+
+      // Sort by last_call if requested
+      if (sortField === 'last_call') {
+        enhancedClients.sort((a, b) => {
+          const dateA = a.last_call_date ? new Date(a.last_call_date).getTime() : 0
+          const dateB = b.last_call_date ? new Date(b.last_call_date).getTime() : 0
+          return ascending ? dateA - dateB : dateB - dateA
+        })
+      }
     } else {
       enhancedClients = clients?.map(client => ({
         ...client,

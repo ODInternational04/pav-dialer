@@ -8,9 +8,9 @@ const supabase = createClient(
 
 export async function POST(request: NextRequest) {
   try {
-    const { username, password } = await request.json()
+    const { username, password, date } = await request.json()
     
-    console.log('Received credentials:', { username, password })
+    console.log('Received credentials:', { username, password, date })
     console.log('Username match:', username === 'stats')
     console.log('Password match:', password === 'stats123')
 
@@ -23,18 +23,18 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get today's date range
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const tomorrow = new Date(today)
-    tomorrow.setDate(tomorrow.getDate() + 1)
+    // Get date range for the selected date (or today if not provided)
+    const selectedDate = date ? new Date(date) : new Date()
+    selectedDate.setHours(0, 0, 0, 0)
+    const nextDay = new Date(selectedDate)
+    nextDay.setDate(nextDay.getDate() + 1)
 
     // Get total calls for today
     const { data: calls, error: callsError } = await supabase
       .from('call_logs')
       .select('id, created_at, user_id')
-      .gte('created_at', today.toISOString())
-      .lt('created_at', tomorrow.toISOString())
+      .gte('created_at', selectedDate.toISOString())
+      .lt('created_at', nextDay.toISOString())
 
     if (callsError) {
       console.error('Error fetching calls:', callsError)
@@ -45,8 +45,8 @@ export async function POST(request: NextRequest) {
     const { data: newClients, error: clientsError } = await supabase
       .from('clients')
       .select('id')
-      .gte('created_at', today.toISOString())
-      .lt('created_at', tomorrow.toISOString())
+      .gte('created_at', selectedDate.toISOString())
+      .lt('created_at', nextDay.toISOString())
 
     if (clientsError) {
       console.error('Error fetching new clients:', clientsError)
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
       totalCalls: calls?.length || 0,
       newClients: newClients?.length || 0,
       userStats: userCallCounts,
-      date: today.toISOString()
+      date: selectedDate.toISOString()
     })
 
   } catch (error) {

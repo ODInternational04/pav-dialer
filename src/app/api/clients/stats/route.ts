@@ -22,26 +22,65 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Get total clients count
-    const { count: totalClients } = await supabase
+    // Get filter parameters from query string
+    const { searchParams } = new URL(request.url)
+    const search = searchParams.get('search') || ''
+    const quotationStatus = searchParams.get('quotationStatus') || 'all'
+    const bookingStatus = searchParams.get('bookingStatus') || 'all'
+
+    // Build base query with filters
+    let clientQuery = supabase
       .from('clients')
-      .select('id', { count: 'exact' })
+      .select('id, quotation_done, booking_status', { count: 'exact' })
 
-    // Get clients with calls
-    const { data: clientsWithCalls } = await supabase
+    // Apply search filter
+    if (search) {
+      const searchTerm = search.trim()
+      clientQuery = clientQuery.or(`name.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,notes.ilike.%${searchTerm}%`)
+    }
+
+    // Apply quotation status filter
+    if (quotationStatus === 'done') {
+      clientQuery = clientQuery.eq('quotation_done', true)
+    } else if (quotationStatus === 'not_done') {
+      clientQuery = clientQuery.or('quotation_done.eq.false,quotation_done.is.null')
+    }
+
+    // Apply booking status filter
+    if (bookingStatus !== 'all') {
+      if (bookingStatus === 'none') {
+        clientQuery = clientQuery.or('booking_status.is.null,booking_status.eq.')
+      } else {
+        clientQuery = clientQuery.eq('booking_status', bookingStatus)
+      }
+    }
+
+    // Get filtered clients
+    const { data: allClients, error: clientsError, count: totalClients } = await clientQuery
+
+    if (clientsError) {
+      console.error('Error fetching clients:', clientsError)
+      return NextResponse.json(
+        { error: 'Failed to fetch clients' },
+        { status: 500 }
+      )
+    }
+
+    const clients = allClients || []
+
+    // Get call logs to determine which clients have been called
+    const { data: callLogs } = await supabase
       .from('call_logs')
-      .select('client_id')
-      .not('client_id', 'is', null)
+      .select('client_id, call_status')
 
-    const uniqueCalledClients = new Set(clientsWithCalls?.map(log => log.client_id) || [])
-    const calledClientsCount = uniqueCalledClients.size
-    const notCalledClientsCount = (totalClients || 0) - calledClientsCount
+    // Create set of called client IDs
+    const calledClientIds = new Set(callLogs?.map(log => log.client_id) || [])
+    
+    // Filter clients based on which ones have been called
+    const calledClients = clients.filter(c => calledClientIds.has(c.id))
+    const notCalledClients = clients.filter(c => !calledClientIds.has(c.id))
 
-    // Get call statistics by status
-    const { data: callStats } = await supabase
-      .from('call_logs')
-      .select('call_status, client_id')
-
+    // Calculate call status breakdown
     const callStatusStats = {
       completed: 0,
       missed: 0,
@@ -50,11 +89,26 @@ export async function GET(request: NextRequest) {
       no_answer: 0
     }
 
-    callStats?.forEach(call => {
+    callLogs?.forEach(call => {
       if (call.call_status in callStatusStats) {
         callStatusStats[call.call_status as keyof typeof callStatusStats]++
       }
     })
+
+    // Calculate quotation statistics
+    const quotationDone = clients.filter(c => c.quotation_done === true).length
+    const quotationPending = clients.filter(c => !c.quotation_done).length
+
+    // Calculate booking status statistics
+    const bookingStatusCounts = {
+      pending: clients.filter(c => c.booking_status === 'Pending').length,
+      confirmed: clients.filter(c => c.booking_status === 'Confirmed').length,
+      cancelled: clients.filter(c => c.booking_status === 'Cancelled').length,
+      completed: clients.filter(c => c.booking_status === 'Completed').length,
+      onHold: clients.filter(c => c.booking_status === 'On Hold').length,
+      followUp: clients.filter(c => c.booking_status === 'Follow Up Required').length,
+      none: clients.filter(c => !c.booking_status || c.booking_status === '').length
+    }
 
     // Get recent activity (last 7 days)
     const sevenDaysAgo = new Date()
@@ -76,9 +130,17 @@ export async function GET(request: NextRequest) {
 
     const stats = {
       totalClients: totalClients || 0,
-      calledClients: calledClientsCount,
-      notCalledClients: notCalledClientsCount,
-      successRate: totalClients ? Math.round((calledClientsCount / totalClients) * 100) : 0,
+      calledClients: calledClients.length,
+      notCalledClients: notCalledClients.length,
+      successRate: totalClients ? Math.round((calledClients.length / totalClients) * 100) : 0,
+      
+      // Quotation statistics
+      quotationDone: quotationDone,
+      quotationPending: quotationPending,
+      
+      // Booking status statistics
+      bookingStatus: bookingStatusCounts,
+      
       callStatusBreakdown: callStatusStats,
       recentActivity: {
         callsLast7Days: recentCalls || 0,

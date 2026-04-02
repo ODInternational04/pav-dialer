@@ -40,6 +40,8 @@ interface ClientsResponse {
 }
 
 type CallStatusFilter = 'all' | 'called' | 'not_called'
+type QuotationStatusFilter = 'all' | 'done' | 'not_done'
+type BookingStatusFilter = 'all' | 'none' | 'Pending' | 'Confirmed' | 'Cancelled' | 'Completed' | 'On Hold' | 'Follow Up Required'
 type SortField = 'created_at' | 'name' | 'phone' | 'email' | 'last_call'
 type SortOrder = 'asc' | 'desc'
 
@@ -56,6 +58,8 @@ export default function ClientsPage() {
   const [totalPages, setTotalPages] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const [callStatusFilter, setCallStatusFilter] = useState<CallStatusFilter>('all')
+  const [quotationStatusFilter, setQuotationStatusFilter] = useState<QuotationStatusFilter>('all')
+  const [bookingStatusFilter, setBookingStatusFilter] = useState<BookingStatusFilter>('all')
   const [sortField, setSortField] = useState<SortField>('created_at')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -70,6 +74,24 @@ export default function ClientsPage() {
   const [showFilterPanel, setShowFilterPanel] = useState(false)
   const [uploadPreview, setUploadPreview] = useState<{ headers: string[]; rows: string[][]; fileName: string } | null>(null)
   const [isZohoSyncing, setIsZohoSyncing] = useState(false)
+  
+  // Stats state for global statistics (across all pages)
+  const [stats, setStats] = useState({
+    totalClients: 0,
+    calledClients: 0,
+    notCalledClients: 0,
+    quotationDone: 0,
+    quotationPending: 0,
+    bookingStatus: {
+      pending: 0,
+      confirmed: 0,
+      cancelled: 0,
+      completed: 0,
+      onHold: 0,
+      followUp: 0,
+      none: 0
+    }
+  })
 
   // Ref for search input to maintain focus
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -118,6 +140,8 @@ export default function ClientsPage() {
         page: currentPage.toString(),
         limit: limit.toString(),
         callStatus: callStatusFilter,
+        quotationStatus: quotationStatusFilter,
+        bookingStatus: bookingStatusFilter,
         sortBy: sortField,
         sortOrder: sortOrder,
         ...(search && { search }),
@@ -141,7 +165,46 @@ export default function ClientsPage() {
       setLoading(false)
       setSearchLoading(false)
     }
-  }, [currentPage, search, callStatusFilter, sortField, sortOrder])
+  }, [currentPage, search, callStatusFilter, quotationStatusFilter, bookingStatusFilter, sortField, sortOrder])
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const params = new URLSearchParams({
+        ...(search && { search }),
+        quotationStatus: quotationStatusFilter,
+        bookingStatus: bookingStatusFilter,
+      })
+
+      const response = await fetch(`/api/clients/stats?${params}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setStats({
+          totalClients: data.totalClients || 0,
+          calledClients: data.calledClients || 0,
+          notCalledClients: data.notCalledClients || 0,
+          quotationDone: data.quotationDone || 0,
+          quotationPending: data.quotationPending || 0,
+          bookingStatus: data.bookingStatus || {
+            pending: 0,
+            confirmed: 0,
+            cancelled: 0,
+            completed: 0,
+            onHold: 0,
+            followUp: 0,
+            none: 0
+          }
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching stats:', error)
+    }
+  }, [search, quotationStatusFilter, bookingStatusFilter])
 
   const fetchClientCallLogs = async (clientId: string) => {
     try {
@@ -316,7 +379,8 @@ export default function ClientsPage() {
 
   useEffect(() => {
     fetchClients(true) // Initial load
-  }, [fetchClients])
+    fetchStats() // Fetch global statistics
+  }, [fetchClients, fetchStats])
 
   // Callback workflow effect
   useEffect(() => {
@@ -347,8 +411,9 @@ export default function ClientsPage() {
   useEffect(() => {
     if (refreshTrigger > 0) {
       fetchClients()
+      fetchStats()
     }
-  }, [refreshTrigger, fetchClients])
+  }, [refreshTrigger, fetchClients, fetchStats])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -391,13 +456,12 @@ export default function ClientsPage() {
   )
 
   // Filter statistics
-  const getFilterStats = () => {
-    const calledCount = clients.filter(c => c.has_been_called).length
-    const notCalledCount = clients.filter(c => !c.has_been_called).length
-    return { calledCount, notCalledCount }
-  }
-
-  const { calledCount, notCalledCount } = getFilterStats()
+  // Use stats from API (global statistics across all pages)
+  const calledCount = stats.calledClients
+  const notCalledCount = stats.notCalledClients
+  const quotationDoneCount = stats.quotationDone
+  const quotationPendingCount = stats.quotationPending
+  const bookingCounts = stats.bookingStatus
 
   const handleSaveCallLog = async (callLogData: CreateCallLogRequest) => {
     try {
@@ -441,6 +505,7 @@ export default function ClientsPage() {
         }
         
         fetchClients()
+        fetchStats()
         
         if (showCallHistory === callLogData.client_id) {
           fetchClientCallLogs(callLogData.client_id)
@@ -461,6 +526,7 @@ export default function ClientsPage() {
       setShowCreateModal(false)
       setSelectedClient(null)
       await fetchClients()
+      await fetchStats()
     } catch (error) {
       console.error('Error handling client save:', error)
     }
@@ -493,6 +559,7 @@ export default function ClientsPage() {
 
       if (response.ok) {
         fetchClients()
+        fetchStats()
       } else {
         alert('Failed to delete client')
       }
@@ -529,6 +596,7 @@ export default function ClientsPage() {
         
         alert(message)
         fetchClients()
+        fetchStats()
       } else {
         alert(`❌ ${result.error || 'Failed to sync with Zoho'}\n${result.message || ''}`)
       }
@@ -545,6 +613,8 @@ export default function ClientsPage() {
     setSearchInput('')
     setSearch('')
     setCallStatusFilter('all')
+    setQuotationStatusFilter('all')
+    setBookingStatusFilter('all')
     setSortField('created_at')
     setSortOrder('desc')
     setCurrentPage(1)
@@ -577,7 +647,7 @@ export default function ClientsPage() {
               )}
             </div>
             <p className="text-gray-600">
-              Manage client information and track call progress ({totalCount} total)
+              Manage client information and track call progress ({stats.totalClients} total)
             </p>
           </div>
           <div className="flex space-x-3">
@@ -616,7 +686,7 @@ export default function ClientsPage() {
                 )}
               </button>
             )}
-            <QuickCallButton onCallComplete={fetchClients} />
+            <QuickCallButton onCallComplete={() => { fetchClients(); fetchStats(); }} />
             <button
               onClick={() => {
                 setSelectedClient(null)
@@ -679,20 +749,20 @@ export default function ClientsPage() {
         {/* Filter Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className={`card p-4 cursor-pointer border-2 transition-all ${
-            callStatusFilter === 'all' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
-          }`} onClick={() => { setCallStatusFilter('all'); setCurrentPage(1) }}>
+            callStatusFilter === 'all' && quotationStatusFilter === 'all' && bookingStatusFilter === 'all' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+          }`} onClick={() => { setCallStatusFilter('all'); setQuotationStatusFilter('all'); setBookingStatusFilter('all'); setCurrentPage(1) }}>
             <div className="flex items-center">
               <UserGroupIcon className="w-8 h-8 text-blue-600" />
               <div className="ml-3">
                 <p className="text-sm font-medium text-gray-900">All Clients</p>
-                <p className="text-2xl font-bold text-blue-600">{totalCount}</p>
+                <p className="text-2xl font-bold text-blue-600">{stats.totalClients}</p>
               </div>
             </div>
           </div>
           
           <div className={`card p-4 cursor-pointer border-2 transition-all ${
             callStatusFilter === 'called' ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-gray-300'
-          }`} onClick={() => { setCallStatusFilter('called'); setCurrentPage(1) }}>
+          }`} onClick={() => { setCallStatusFilter(callStatusFilter === 'called' ? 'all' : 'called'); setCurrentPage(1) }}>
             <div className="flex items-center">
               <CheckCircleIcon className="w-8 h-8 text-green-600" />
               <div className="ml-3">
@@ -704,7 +774,7 @@ export default function ClientsPage() {
           
           <div className={`card p-4 cursor-pointer border-2 transition-all ${
             callStatusFilter === 'not_called' ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-gray-300'
-          }`} onClick={() => { setCallStatusFilter('not_called'); setCurrentPage(1) }}>
+          }`} onClick={() => { setCallStatusFilter(callStatusFilter === 'not_called' ? 'all' : 'not_called'); setCurrentPage(1) }}>
             <div className="flex items-center">
               <PhoneArrowUpRightIcon className="w-8 h-8 text-orange-600" />
               <div className="ml-3">
@@ -720,9 +790,84 @@ export default function ClientsPage() {
               <div className="ml-3">
                 <p className="text-sm font-medium text-gray-900">Success Rate</p>
                 <p className="text-2xl font-bold text-purple-600">
-                  {totalCount > 0 ? Math.round((calledCount / totalCount) * 100) : 0}%
+                  {stats.totalClients > 0 ? Math.round((stats.calledClients / stats.totalClients) * 100) : 0}%
                 </p>
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Quotation & Booking Status Quick Filters */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Quotation Status Cards */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className={`card p-3 cursor-pointer border-2 transition-all ${
+              quotationStatusFilter === 'done' ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-gray-300'
+            }`} onClick={() => { setQuotationStatusFilter(quotationStatusFilter === 'done' ? 'all' : 'done'); setCurrentPage(1) }}>
+              <div className="flex items-center">
+                <CheckCircleIcon className="w-6 h-6 text-green-600" />
+                <div className="ml-2">
+                  <p className="text-xs font-medium text-gray-600">Quotation Done</p>
+                  <p className="text-xl font-bold text-green-600">{quotationDoneCount}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className={`card p-3 cursor-pointer border-2 transition-all ${
+              quotationStatusFilter === 'not_done' ? 'border-amber-500 bg-amber-50' : 'border-gray-200 hover:border-gray-300'
+            }`} onClick={() => { setQuotationStatusFilter(quotationStatusFilter === 'not_done' ? 'all' : 'not_done'); setCurrentPage(1) }}>
+              <div className="flex items-center">
+                <ClockIcon className="w-6 h-6 text-amber-600" />
+                <div className="ml-2">
+                  <p className="text-xs font-medium text-gray-600">Quotation Pending</p>
+                  <p className="text-xl font-bold text-amber-600">{quotationPendingCount}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Booking Status Cards */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className={`card p-2 cursor-pointer border-2 transition-all text-center ${
+              bookingStatusFilter === 'Pending' ? 'border-yellow-500 bg-yellow-50' : 'border-gray-200 hover:border-gray-300'
+            }`} onClick={() => { setBookingStatusFilter(bookingStatusFilter === 'Pending' ? 'all' : 'Pending'); setCurrentPage(1) }}>
+              <p className="text-xs font-medium text-gray-600">Pending</p>
+              <p className="text-lg font-bold text-yellow-600">{bookingCounts.pending}</p>
+            </div>
+            
+            <div className={`card p-2 cursor-pointer border-2 transition-all text-center ${
+              bookingStatusFilter === 'Confirmed' ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-gray-300'
+            }`} onClick={() => { setBookingStatusFilter(bookingStatusFilter === 'Confirmed' ? 'all' : 'Confirmed'); setCurrentPage(1) }}>
+              <p className="text-xs font-medium text-gray-600">Confirmed</p>
+              <p className="text-lg font-bold text-green-600">{bookingCounts.confirmed}</p>
+            </div>
+            
+            <div className={`card p-2 cursor-pointer border-2 transition-all text-center ${
+              bookingStatusFilter === 'Completed' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+            }`} onClick={() => { setBookingStatusFilter(bookingStatusFilter === 'Completed' ? 'all' : 'Completed'); setCurrentPage(1) }}>
+              <p className="text-xs font-medium text-gray-600">Completed</p>
+              <p className="text-lg font-bold text-blue-600">{bookingCounts.completed}</p>
+            </div>
+            
+            <div className={`card p-2 cursor-pointer border-2 transition-all text-center ${
+              bookingStatusFilter === 'Cancelled' ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+            }`} onClick={() => { setBookingStatusFilter(bookingStatusFilter === 'Cancelled' ? 'all' : 'Cancelled'); setCurrentPage(1) }}>
+              <p className="text-xs font-medium text-gray-600">Cancelled</p>
+              <p className="text-lg font-bold text-red-600">{bookingCounts.cancelled}</p>
+            </div>
+            
+            <div className={`card p-2 cursor-pointer border-2 transition-all text-center ${
+              bookingStatusFilter === 'On Hold' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-gray-300'
+            }`} onClick={() => { setBookingStatusFilter(bookingStatusFilter === 'On Hold' ? 'all' : 'On Hold'); setCurrentPage(1) }}>
+              <p className="text-xs font-medium text-gray-600">On Hold</p>
+              <p className="text-lg font-bold text-purple-600">{bookingCounts.onHold}</p>
+            </div>
+            
+            <div className={`card p-2 cursor-pointer border-2 transition-all text-center ${
+              bookingStatusFilter === 'Follow Up Required' ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-gray-300'
+            }`} onClick={() => { setBookingStatusFilter(bookingStatusFilter === 'Follow Up Required' ? 'all' : 'Follow Up Required'); setCurrentPage(1) }}>
+              <p className="text-xs font-medium text-gray-600">Follow Up</p>
+              <p className="text-lg font-bold text-orange-600">{bookingCounts.followUp}</p>
             </div>
           </div>
         </div>
@@ -740,7 +885,7 @@ export default function ClientsPage() {
               </button>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* Call Status Filter */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -757,6 +902,49 @@ export default function ClientsPage() {
                   <option value="all">All Clients</option>
                   <option value="called">Already Called</option>
                   <option value="not_called">Not Called Yet</option>
+                </select>
+              </div>
+
+              {/* Quotation Status Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Quotation Status
+                </label>
+                <select
+                  value={quotationStatusFilter}
+                  onChange={(e) => {
+                    setQuotationStatusFilter(e.target.value as QuotationStatusFilter)
+                    setCurrentPage(1)
+                  }}
+                  className="input"
+                >
+                  <option value="all">All Quotations</option>
+                  <option value="done">✅ Quotation Done</option>
+                  <option value="not_done">⏳ Quotation Pending</option>
+                </select>
+              </div>
+
+              {/* Booking Status Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Booking Status
+                </label>
+                <select
+                  value={bookingStatusFilter}
+                  onChange={(e) => {
+                    setBookingStatusFilter(e.target.value as BookingStatusFilter)
+                    setCurrentPage(1)
+                  }}
+                  className="input"
+                >
+                  <option value="all">All Bookings</option>
+                  <option value="none">No Status Set</option>
+                  <option value="Pending">⏳ Pending</option>
+                  <option value="Confirmed">✅ Confirmed</option>
+                  <option value="Cancelled">❌ Cancelled</option>
+                  <option value="Completed">🎉 Completed</option>
+                  <option value="On Hold">⏸️ On Hold</option>
+                  <option value="Follow Up Required">📞 Follow Up Required</option>
                 </select>
               </div>
 
@@ -810,7 +998,7 @@ export default function ClientsPage() {
               <input
                 ref={searchInputRef}
                 type="text"
-                placeholder="Search by name, phone, or email..."
+                placeholder="Search by name, phone, email, or notes... (min 3 characters)"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 className="input pl-10 pr-10"
@@ -846,13 +1034,15 @@ export default function ClientsPage() {
         </div>
 
         {/* Active Filter Indicator */}
-        {(callStatusFilter !== 'all' || search || sortField !== 'created_at' || sortOrder !== 'desc') && (
+        {(callStatusFilter !== 'all' || quotationStatusFilter !== 'all' || bookingStatusFilter !== 'all' || search || sortField !== 'created_at' || sortOrder !== 'desc') && (
           <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-3">
             <div className="flex items-center space-x-2">
               <ExclamationTriangleIcon className="w-5 h-5 text-blue-600" />
               <span className="text-sm text-blue-800">
                 Active filters: 
-                {callStatusFilter !== 'all' && ` Status: ${callStatusFilter.replace('_', ' ')}`}
+                {callStatusFilter !== 'all' && ` Call Status: ${callStatusFilter.replace('_', ' ')}`}
+                {quotationStatusFilter !== 'all' && ` | Quotation: ${quotationStatusFilter === 'done' ? 'Done' : 'Pending'}`}
+                {bookingStatusFilter !== 'all' && ` | Booking: ${bookingStatusFilter}`}
                 {search && ` | Search: "${search}"`}
                 {sortField !== 'created_at' && ` | Sort: ${sortField.replace('_', ' ')}`}
                 {sortOrder !== 'desc' && ` | Order: ${sortOrder}`}

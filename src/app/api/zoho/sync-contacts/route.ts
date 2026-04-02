@@ -33,9 +33,9 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Timeout protection for Vercel (20 seconds max processing time)
+    // Timeout protection for Vercel (45 seconds max processing time for better completion)
     const startTime = Date.now()
-    const MAX_PROCESSING_TIME = 20000 // 20 seconds
+    const MAX_PROCESSING_TIME = 45000 // 45 seconds (safer for Vercel's 60s limit)
     
     let page = 1
     let hasMore = true
@@ -45,14 +45,18 @@ export async function POST(request: NextRequest) {
     let skippedCount = 0
     const errors: string[] = []
     let timeoutReached = false
+    
+    // Collect all contacts first for batch processing
+    const allContactsToProcess: any[] = []
 
     console.log('🔄 Starting Zoho contacts sync...')
 
+    // Step 1: Fetch all contacts from all pages
     while (hasMore && !timeoutReached) {
       try {
         // Check if we're approaching timeout
         if (Date.now() - startTime > MAX_PROCESSING_TIME) {
-          console.log('⏱️ Timeout approaching, stopping sync early')
+          console.log('⏱️ Timeout approaching, stopping fetch early')
           timeoutReached = true
           break
         }
@@ -66,164 +70,136 @@ export async function POST(request: NextRequest) {
         }
 
         console.log(`✅ Retrieved ${zohoContacts.data.length} contacts from page ${page}`)
-
-        for (const contact of zohoContacts.data) {
-          try {
-            const phone = contact.Phone || contact.Mobile
-            if (!phone) {
-              console.log(`⏭️ Skipping contact ${contact.id}: No phone number`)
-              skippedCount++
-              continue
-            }
-
-            // Debug: Log all fields for the first contact to see what Zoho returns
-            if (syncedCount === 0) {
-              console.log('🔍 DEBUG - First contact fields from Zoho:', Object.keys(contact))
-              console.log('🔍 DEBUG - Booking status field value:', {
-                'Booking_status': contact.Booking_status,
-                'Booking_Status': contact.Booking_Status,
-                'Booking status': contact['Booking status'],
-                'BookingStatus': contact.BookingStatus
-              })
-            }
-
-            // Check if client exists by phone
-            const { data: existing } = await supabase
-              .from('clients')
-              .select('id, zoho_contact_id, name')
-              .eq('phone', phone)
-              .single()
-
-            const fullName = [contact.First_Name, contact.Last_Name]
-              .filter(Boolean)
-              .join(' ')
-              .trim() || 'Unknown'
-
-            if (existing) {
-              // Update with Zoho ID and custom fields if missing or different
-              const updateData: any = { 
-                zoho_contact_id: contact.id,
-                zoho_synced_at: new Date().toISOString(),
-                zoho_last_sync_status: 'success'
-              }
-
-              // Sync quotation_done field from Zoho (supports various field names and formats)
-              if (contact.hasOwnProperty('Quotation_Done') || contact.hasOwnProperty('Quotation_done')) {
-                const quotationValue = contact.Quotation_Done || contact.Quotation_done
-                // Convert "yes"/"no" strings to boolean
-                if (typeof quotationValue === 'string') {
-                  updateData.quotation_done = quotationValue.toLowerCase() === 'yes' || quotationValue.toLowerCase() === 'true'
-                } else {
-                  updateData.quotation_done = quotationValue === true
-                }
-                console.log(`  📝 Quotation_done: ${quotationValue} -> ${updateData.quotation_done}`)
-              }
-
-              // Sync booking_status field from Zoho (supports various field names)
-              if (contact.hasOwnProperty('Booking_status') || contact.hasOwnProperty('Booking_Status') || 
-                  contact.hasOwnProperty('Booking status') || contact.hasOwnProperty('BookingStatus')) {
-                let bookingValue = contact.Booking_status || contact.Booking_Status || 
-                                   contact['Booking status'] || contact.BookingStatus || null
-                // Handle both array (multi-select) and string formats
-                if (Array.isArray(bookingValue) && bookingValue.length > 0) {
-                  updateData.booking_status = bookingValue[0]
-                } else if (typeof bookingValue === 'string') {
-                  updateData.booking_status = bookingValue
-                } else {
-                  updateData.booking_status = null
-                }
-                console.log(`  📋 Booking_status: ${JSON.stringify(bookingValue)} -> ${updateData.booking_status}`)
-              }
-
-              if (!existing.zoho_contact_id || existing.zoho_contact_id !== contact.id) {
-                await supabase
-                  .from('clients')
-                  .update(updateData)
-                  .eq('id', existing.id)
-                
-                console.log(`🔄 Updated client ${existing.name} with Zoho data`)
-                updatedCount++
-              } else {
-                // Still update custom fields even if Zoho ID is already set
-                await supabase
-                  .from('clients')
-                  .update(updateData)
-                  .eq('id', existing.id)
-                console.log(`✓ Client ${existing.name} synced with custom fields`)
-              }
-            } else {
-              // Create new client from Zoho
-              const insertData: any = {
-                name: fullName,
-                phone: phone,
-                email: contact.Email || null,
-                notes: contact.Description ? `Imported from Zoho Bigin: ${contact.Description}` : 'Imported from Zoho Bigin',
-                zoho_contact_id: contact.id,
-                zoho_synced_at: new Date().toISOString(),
-                zoho_last_sync_status: 'success',
-                created_by: decoded.userId,
-                last_updated_by: decoded.userId
-              }
-
-              // Sync quotation_done field from Zoho (supports string "yes"/"no" or boolean)
-              if (contact.hasOwnProperty('Quotation_Done') || contact.hasOwnProperty('Quotation_done')) {
-                const quotationValue = contact.Quotation_Done || contact.Quotation_done
-                // Convert "yes"/"no" strings to boolean
-                if (typeof quotationValue === 'string') {
-                  insertData.quotation_done = quotationValue.toLowerCase() === 'yes' || quotationValue.toLowerCase() === 'true'
-                } else {
-                  insertData.quotation_done = quotationValue === true
-                }
-                console.log(`  📝 Quotation_done: ${quotationValue} -> ${insertData.quotation_done}`)
-              }
-
-              // Sync booking_status field from Zoho
-              if (contact.hasOwnProperty('Booking_status') || contact.hasOwnProperty('Booking_Status') || 
-                  contact.hasOwnProperty('Booking status') || contact.hasOwnProperty('BookingStatus')) {
-                let bookingValue = contact.Booking_status || contact.Booking_Status || 
-                                   contact['Booking status'] || contact.BookingStatus || null
-                // Handle both array (multi-select) and string formats
-                if (Array.isArray(bookingValue) && bookingValue.length > 0) {
-                  insertData.booking_status = bookingValue[0]
-                } else if (typeof bookingValue === 'string') {
-                  insertData.booking_status = bookingValue
-                } else {
-                  insertData.booking_status = null
-                }
-                console.log(`  📋 Booking_status: ${JSON.stringify(bookingValue)} -> ${insertData.booking_status}`)
-              }
-
-              const { error: insertError } = await supabase
-                .from('clients')
-                .insert(insertData)
-
-              if (insertError) {
-                console.error(`❌ Error creating client for ${fullName}:`, insertError.message)
-                errors.push(`Failed to create ${fullName}: ${insertError.message}`)
-              } else {
-                console.log(`➕ Created new client ${fullName}`)
-                createdCount++
-              }
-            }
-            
-            syncedCount++
-          } catch (contactError: any) {
-            console.error(`❌ Error processing contact ${contact.id}:`, contactError.message)
-            errors.push(`Contact ${contact.id}: ${contactError.message}`)
-          }
-        }
+        
+        // Add to batch for processing
+        allContactsToProcess.push(...zohoContacts.data)
 
         // Check if there are more pages
         page++
         hasMore = zohoContacts.info?.more_records === true
         
-        if (hasMore) {
-          console.log(`📄 More records available, fetching page ${page}...`)
-        }
       } catch (pageError: any) {
         console.error(`❌ Error fetching page ${page}:`, pageError.message)
         errors.push(`Page ${page}: ${pageError.message}`)
         hasMore = false
+      }
+    }
+
+    console.log(`📦 Fetched ${allContactsToProcess.length} total contacts, processing in batches...`)
+
+    // Step 2: Get all existing clients by phone for quick lookup
+    const allPhones = allContactsToProcess
+      .map(c => c.Phone || c.Mobile)
+      .filter(Boolean)
+    
+    const { data: existingClients } = await supabase
+      .from('clients')
+      .select('id, phone, zoho_contact_id')
+      .in('phone', allPhones)
+    
+    const phoneToClientMap = new Map(
+      existingClients?.map(c => [c.phone, c]) || []
+    )
+
+    console.log(`🔍 Found ${existingClients?.length || 0} existing clients`)
+
+    // Step 3: Prepare batch operations
+    const toInsert: any[] = []
+    const toUpdate: any[] = []
+
+    for (const contact of allContactsToProcess) {
+      try {
+        const phone = contact.Phone || contact.Mobile
+        if (!phone) {
+          skippedCount++
+          continue
+        }
+
+        const fullName = [contact.First_Name, contact.Last_Name]
+          .filter(Boolean)
+          .join(' ')
+          .trim() || 'Unknown'
+
+        // Extract custom fields
+        const quotationValue = contact.Quotation_Done || contact.Quotation_done
+        const quotationDone = typeof quotationValue === 'string' 
+          ? quotationValue.toLowerCase() === 'yes' || quotationValue.toLowerCase() === 'true'
+          : quotationValue === true
+
+        const bookingValue = contact.Booking_status || contact.Booking_Status || 
+                            contact['Booking status'] || contact.BookingStatus || null
+        const bookingStatus = Array.isArray(bookingValue) && bookingValue.length > 0
+          ? bookingValue[0]
+          : typeof bookingValue === 'string' ? bookingValue : null
+
+        const existing = phoneToClientMap.get(phone)
+
+        if (existing) {
+          // Update existing
+          toUpdate.push({
+            id: existing.id,
+            zoho_contact_id: contact.id,
+            zoho_synced_at: new Date().toISOString(),
+            zoho_last_sync_status: 'success',
+            quotation_done: quotationDone || false,
+            booking_status: bookingStatus,
+            name: fullName, // Update name in case it changed
+            email: contact.Email || null
+          })
+          updatedCount++
+        } else {
+          // Insert new
+          toInsert.push({
+            name: fullName,
+            phone: phone,
+            email: contact.Email || null,
+            notes: contact.Description ? `Imported from Zoho: ${contact.Description}` : 'Imported from Zoho Bigin',
+            zoho_contact_id: contact.id,
+            zoho_synced_at: new Date().toISOString(),
+            zoho_last_sync_status: 'success',
+            quotation_done: quotationDone || false,
+            booking_status: bookingStatus,
+            created_by: decoded.userId,
+            last_updated_by: decoded.userId
+          })
+          createdCount++
+        }
+
+        syncedCount++
+      } catch (contactError: any) {
+        console.error(`❌ Error processing contact ${contact.id}:`, contactError.message)
+        errors.push(`Contact ${contact.id}: ${contactError.message}`)
+      }
+    }
+
+    // Step 4: Execute batch operations
+    console.log(`💾 Inserting ${toInsert.length} new clients...`)
+    if (toInsert.length > 0) {
+      const { error: insertError } = await supabase
+        .from('clients')
+        .insert(toInsert)
+      
+      if (insertError) {
+        console.error('❌ Batch insert error:', insertError.message)
+        errors.push(`Batch insert failed: ${insertError.message}`)
+      }
+    }
+
+    console.log(`🔄 Updating ${toUpdate.length} existing clients...`)
+    // Update in batches of 50 for better performance
+    const updateBatchSize = 50
+    for (let i = 0; i < toUpdate.length; i += updateBatchSize) {
+      const batch = toUpdate.slice(i, i + updateBatchSize)
+      
+      for (const update of batch) {
+        const { error: updateError } = await supabase
+          .from('clients')
+          .update(update)
+          .eq('id', update.id)
+        
+        if (updateError) {
+          console.error(`❌ Update error for client ${update.id}:`, updateError.message)
+        }
       }
     }
 
